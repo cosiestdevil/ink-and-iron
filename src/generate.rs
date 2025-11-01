@@ -215,6 +215,7 @@ pub fn generate_world<R: Rng + Clone>(
     let neighbours = build_neighbors_from_voronoi(&continents_voronoi);
     let mut cells: Vec<Cell> = Vec::new();
     let mut plate_to_cells: HashMap<PlateId, Vec<CellId>> = HashMap::new();
+    let last_plate = plates_to_cells.keys().map(|p|p.0).max().unwrap();
     for v_cell in continents_voronoi.iter_cells() {
         let cell_id = CellId(v_cell.site());
         let plate = if let Some(p) = hull_plates.iter().find(|(_k, v)| {
@@ -222,7 +223,7 @@ pub fn generate_world<R: Rng + Clone>(
         }) {
             *p.0
         } else {
-            PlateId(0)
+            PlateId(last_plate)
         };
         let cell = Cell {
             id: cell_id,

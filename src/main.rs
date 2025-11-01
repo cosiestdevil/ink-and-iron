@@ -1,5 +1,5 @@
 use crate::generate::{CellId, WorldMap};
-use bevy::prelude::*;
+use bevy::{ecs::relationship::RelationshipSourceCollection, prelude::*};
 use bevy_pancam::{PanCam, PanCamPlugin};
 use clap::Parser;
 use colorgrad::Gradient;
@@ -10,6 +10,7 @@ use rand_chacha::ChaCha20Rng;
 
 mod generate;
 mod helpers;
+mod pathfinding;
 #[derive(Parser, Debug)]
 struct Args {
     #[arg(long, default_value_t = 16.0)]
@@ -60,7 +61,9 @@ fn main() -> anyhow::Result<()> {
                 ..default()
             }),
             PanCamPlugin,
+            MeshPickingPlugin,
         ))
+        .insert_resource(SelectedCell(None))
         .insert_resource(a)
         .add_systems(Startup, startup)
         .run();
@@ -72,8 +75,16 @@ fn startup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    commands.spawn((Camera2d, PanCam::default()));
     let scale = 500.0;
+    commands.spawn((
+        Camera2d,
+        Transform::from_xyz(8.0 * scale, 4.5 * scale, 0.0),
+        PanCam {
+            max_scale: 1.0,
+            ..default()
+        },
+    ));
+
     let g = colorgrad::GradientBuilder::new()
         .css("#001a33 0%, #003a6b 18%, #0f7a8a 32%, #bfe9e9 42%, #f2e6c8 48%, #e8d7a1 52%, #a7c88a 62%, #5b7f3a 72%, #8c8f93 85%, #cdd2d8 93%, #ffffff 100%   ")
         .build::<colorgrad::LinearGradient>().unwrap();
@@ -95,8 +106,10 @@ fn startup(
             let mesh_id = meshes.add(polygon);
             let color = g.at(*world_map.cell_height.get(&CellId(v_cell.site())).unwrap());
             let color = bevy::color::Color::srgb(color.r, color.g, color.b);
-            commands.spawn((
-                Mesh2d(mesh_id),
+            let polyline = bevy::math::primitives::Polyline2d::new(vertices);
+            let outline_mesh_id = meshes.add(polyline);
+            let mut cell = commands.spawn((
+                Mesh2d(mesh_id.clone()),
                 MeshMaterial2d(materials.add(color)),
                 Transform::from_xyz(
                     // Distribute shapes from -X_EXTENT/2 to +X_EXTENT/2.
@@ -104,19 +117,74 @@ fn startup(
                     v_cell.site_position().y as f32 * scale,
                     0.0,
                 ),
+                Cell {
+                    cell_id: CellId(v_cell.site()),
+                    outline: outline_mesh_id.clone(),
+                },
             ));
-            let polyline = bevy::math::primitives::Polyline2d::new(vertices);
-            let mesh_id = meshes.add(polyline);
-            commands.spawn((
-                Mesh2d(mesh_id),
+
+            cell.with_child((
+                Mesh2d(outline_mesh_id.clone()),
                 MeshMaterial2d(materials.add(bevy::color::Color::BLACK)),
-                Transform::from_xyz(
-                    // Distribute shapes from -X_EXTENT/2 to +X_EXTENT/2.
-                    v_cell.site_position().x as f32 * scale,
-                    v_cell.site_position().y as f32 * scale,
-                    0.0,
-                ),
+                Transform::from_xyz(0.0, 0.0, 1.0),
             ));
+            cell.observe(
+                |mut event: On<Pointer<Click>>,
+                 cells: Query<&Cell>,
+                 mut selected: ResMut<SelectedCell>| {
+                    if event.button == PointerButton::Primary {
+                        selected.0 = Some(cells.get(event.entity).unwrap().cell_id);
+                        event.propagate(false);
+                    }
+                },
+            )
+            .observe(over_cell);
+
+            //let outline = commands.spawn().id();
+            //cell.add_child(outline);
+        }
+    }
+    fn over_cell(
+        mut event: On<Pointer<Over>>,
+        cells: Query<(&Cell, Entity)>,
+        highlights: Query<Entity, With<CellHighlight>>,
+        selected: Res<SelectedCell>,
+        world_map: Res<WorldMap>,
+        mut commands: Commands,
+        mut materials: ResMut<Assets<ColorMaterial>>,
+    ) {
+        let (graph, nodes) = pathfinding::get_graph(world_map.voronoi.clone());
+        if let Some(start) = selected.0 {
+            for e in highlights.iter() {
+                let mut e = commands.entity(e);
+                e.despawn();
+            }
+            let goal = cells.get(event.entity).unwrap().0.cell_id;
+            let result = pathfinding::a_star(start, goal, graph, nodes, world_map.voronoi.clone());
+            if let Some(result) = result {
+                for cell_id in result {
+                    let cell = cells.iter().find(|e| e.0.cell_id == cell_id);
+                    if let Some((cell, entity)) = cell {
+                        let mut e = commands.entity(entity);
+                        e.with_child((
+                            Mesh2d(cell.outline.clone()),
+                            MeshMaterial2d(materials.add(bevy::color::Color::WHITE)),
+                            Transform::from_xyz(0.0, 0.0, 2.0),
+                            CellHighlight,
+                        ));
+                    }
+                }
+            }
+            event.propagate(false);
         }
     }
 }
+#[derive(Component)]
+struct Cell {
+    pub cell_id: CellId,
+    outline: Handle<Mesh>,
+}
+#[derive(Component)]
+struct CellHighlight;
+#[derive(Resource)]
+struct SelectedCell(Option<CellId>);
