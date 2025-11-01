@@ -1,11 +1,15 @@
 use crate::generate::CellId;
-use bevy::platform::collections::HashMap;
 use glam::Vec2;
+use glam::Vec3;
 use petgraph::Graph;
 use petgraph::prelude::*;
+use std::collections::HashMap;
 use voronoice::Voronoi;
 
-pub fn get_graph(voronoi: Voronoi) -> (Graph<CellId, f32>,HashMap<CellId,NodeIndex>) {
+pub fn get_graph(
+    voronoi: Voronoi,
+    heights: HashMap<CellId, f32>,
+) -> (Graph<CellId, f32>, HashMap<CellId, NodeIndex>) {
     let mut graph = Graph::<CellId, f32>::new();
     let mut nodes = HashMap::new();
     for cell in voronoi.iter_cells() {
@@ -15,17 +19,25 @@ pub fn get_graph(voronoi: Voronoi) -> (Graph<CellId, f32>,HashMap<CellId,NodeInd
     }
     for (cell_id, node) in nodes.iter() {
         let cell = voronoi.cell(cell_id.0);
+        let c_height = heights.get(cell_id).unwrap();
+        let c_pos = cell.site_position().to_vec2();
         for n_cell_id in cell.iter_neighbors() {
             let n_cell = voronoi.cell(n_cell_id);
-            let weight = Vec2::new(cell.site_position().x as f32, cell.site_position().y as f32)
-                .distance(Vec2::new(
-                    n_cell.site_position().x as f32,
-                    n_cell.site_position().y as f32,
-                ));
-            graph.add_edge(*node, *nodes.get(&CellId(n_cell_id)).unwrap(), weight);
+            let n_height = heights.get(&CellId(n_cell_id)).unwrap();
+            let n_pos = n_cell.site_position().to_vec2();
+            let length = c_pos.distance(n_pos);
+            let height = (c_height - n_height).abs();
+            let slope = height / length;
+            if slope < 0.3 {
+                graph.add_edge(
+                    *node,
+                    *nodes.get(&CellId(n_cell_id)).unwrap(),
+                    c_pos.extend(*c_height).distance(n_pos.extend(*n_height)),
+                );
+            }
         }
     }
-    (graph,nodes)
+    (graph, nodes)
 }
 #[derive(Clone)]
 struct AStarNode {
@@ -54,13 +66,13 @@ pub fn a_star(
     graph: Graph<CellId, f32>,
     nodes: HashMap<CellId, NodeIndex>,
     voronoi: Voronoi,
-)->Option<Vec<CellId>> {
+) -> Option<Vec<CellId>> {
     let mut open_list = vec![AStarNode::new(
         start,
         0.0,
         heuristic(
-            voronoi.cell(start.0).site_position().toVec2(),
-            voronoi.cell(goal.0).site_position().toVec2(),
+            voronoi.cell(start.0).site_position().to_vec2(),
+            voronoi.cell(goal.0).site_position().to_vec2(),
         ),
         None,
     )];
@@ -87,31 +99,32 @@ pub fn a_star(
                     *nodes.get(&CellId(n_cell_id)).unwrap(),
                 )
                 .collect::<Vec<_>>();
-            let distance = edges.first().unwrap();
-            let tent_g = current.g + distance.weight();
-            if let Some(neighbor) = open_list.iter().find(|n| n.cell_id == CellId(n_cell_id)) {
-                if tent_g >= neighbor.g{
-                    continue;
+            if let Some(distance) = edges.first() {
+                let tent_g = current.g + distance.weight();
+                if let Some(neighbor) = open_list.iter().find(|n| n.cell_id == CellId(n_cell_id)) {
+                    if tent_g >= neighbor.g {
+                        continue;
+                    }
+                } else {
+                    open_list.push(AStarNode::new(
+                        CellId(n_cell_id),
+                        tent_g,
+                        heuristic(
+                            voronoi.cell(n_cell_id).site_position().to_vec2(),
+                            voronoi.cell(goal.0).site_position().to_vec2(),
+                        ),
+                        Some(Box::new(current.clone())),
+                    ));
                 }
-            } else {
-                open_list.push(AStarNode::new(
-                    CellId(n_cell_id),
-                    tent_g,
-                    heuristic(
-                        voronoi.cell(n_cell_id).site_position().toVec2(),
-                        voronoi.cell(goal.0).site_position().toVec2(),
-                    ),
-                    Some(Box::new(current.clone())),
-                ));
             }
         }
     }
     None
 }
-fn reconstruct_path(current:AStarNode)->Vec<CellId>{
+fn reconstruct_path(current: AStarNode) -> Vec<CellId> {
     let mut path = Vec::new();
     let mut current = Some(Box::new(current));
-    while let Some(node) = current{
+    while let Some(node) = current {
         path.push(node.cell_id);
         current = node.parent;
     }
@@ -120,12 +133,17 @@ fn reconstruct_path(current:AStarNode)->Vec<CellId>{
 }
 
 trait ToVec2 {
-    fn toVec2(&self) -> Vec2;
+    fn to_vec2(&self) -> Vec2;
+    fn to_vec3(&self, z: f32) -> Vec3;
 }
 
 impl ToVec2 for voronoice::Point {
-    fn toVec2(&self) -> Vec2 {
+    fn to_vec2(&self) -> Vec2 {
         Vec2::new(self.x as f32, self.y as f32)
+    }
+
+    fn to_vec3(&self, z: f32) -> Vec3 {
+        Vec3::new(self.x as f32, self.y as f32, z)
     }
 }
 

@@ -153,7 +153,7 @@ fn startup(
         mut commands: Commands,
         mut materials: ResMut<Assets<ColorMaterial>>,
     ) {
-        let (graph, nodes) = pathfinding::get_graph(world_map.voronoi.clone());
+        let (graph, nodes) = pathfinding::get_graph(world_map.voronoi.clone(),world_map.cell_height.clone());
         if let Some(start) = selected.0 {
             for e in highlights.iter() {
                 let mut e = commands.entity(e);
