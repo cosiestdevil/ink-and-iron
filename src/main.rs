@@ -5,13 +5,18 @@ use std::{
     ops::Deref,
 };
 
-use anyhow::Ok;
+use bevy::prelude::*;
+use bevy_pancam::{DirectionKeys, PanCam, PanCamPlugin};
 use clap::Parser;
+use colorgrad::Gradient;
 use geo::{Contains, CoordsIter, Polygon, unary_union};
 use glam::Vec2;
 use noise::{Fbm, NoiseFn, Perlin, RidgedMulti};
 use num::Num;
-use rand::{Rng, SeedableRng, distr::{Distribution, Uniform}};
+use rand::{
+    Rng, SeedableRng,
+    distr::{Distribution, Uniform},
+};
 
 use rand_chacha::ChaCha20Rng;
 use voronoice::*;
@@ -81,7 +86,7 @@ fn main() -> anyhow::Result<()> {
         }
         None => ChaCha20Rng::from_os_rng(),
     };
-    do_things(
+    let a = do_things(
         args.width,
         args.height,
         args.plate_count,
@@ -96,8 +101,71 @@ fn main() -> anyhow::Result<()> {
     let num = num::BigUint::from_bytes_le(&seed);
     let seed = num.to_str_radix(36);
     println!("Seed: {}", seed);
-
+    App::new()
+        .add_plugins((DefaultPlugins.set(WindowPlugin{primary_window:Some(Window{present_mode:bevy::window::PresentMode::Mailbox,..default()}),..default()}),PanCamPlugin))
+        .insert_resource(a)
+        .add_systems(Startup, startup)
+        .run();
     Ok(())
+}
+fn startup(
+    mut commands: Commands,
+    world_map: Res<WorldMap>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    commands.spawn((Camera2d,PanCam::default()));
+    let scale = 500.0;
+    let g = colorgrad::GradientBuilder::new()
+//.css("#001a33 0%, #003a6b 25%, #0f7a8a 42%, #bfe9e9 51%, #f2e6c8 55%, #e8d7a1 62%, #a7c88a 68%, #5b7f3a 72%, #8c8f93 85%, #cdd2d8 93%, #ffffff 100%   ").build::<colorgrad::LinearGradient>()?;
+.css("#001a33 0%, #003a6b 18%, #0f7a8a 32%, #bfe9e9 42%, #f2e6c8 48%, #e8d7a1 52%, #a7c88a 62%, #5b7f3a 72%, #8c8f93 85%, #cdd2d8 93%, #ffffff 100%   ").build::<colorgrad::LinearGradient>().unwrap();
+    for v_cell in world_map.voronoi.iter_cells() {
+        if v_cell.is_on_hull() {
+            continue;
+        }
+        let mut vertices = v_cell
+            .iter_vertices()
+            .map(|p| {
+                Vec2::new(
+                    (p.x - v_cell.site_position().x) as f32 * scale,
+                    (p.y - v_cell.site_position().y) as f32 * scale,
+                )
+            })
+            .collect::<Vec<_>>();
+        vertices.reverse();
+        if let Ok(polygon) = bevy::math::primitives::ConvexPolygon::new(vertices.clone()) {
+            let mesh_id = meshes.add(polygon);
+            let color = g.at(*world_map.cell_height.get(&CellId(v_cell.site())).unwrap());
+            let color = bevy::color::Color::srgb(color.r, color.g, color.b);
+            commands.spawn((
+                Mesh2d(mesh_id),
+                MeshMaterial2d(materials.add(color)),
+                Transform::from_xyz(
+                    // Distribute shapes from -X_EXTENT/2 to +X_EXTENT/2.
+                    v_cell.site_position().x as f32 * scale,
+                    v_cell.site_position().y as f32 * scale,
+                    0.0,
+                ),
+            ));
+            let polyline = bevy::math::primitives::Polyline2d::new(vertices);
+            let mesh_id = meshes.add(polyline);
+            commands.spawn((
+                Mesh2d(mesh_id),
+                MeshMaterial2d(materials.add(bevy::color::Color::BLACK)),
+                Transform::from_xyz(
+                    // Distribute shapes from -X_EXTENT/2 to +X_EXTENT/2.
+                    v_cell.site_position().x as f32 * scale,
+                    v_cell.site_position().y as f32 * scale,
+                    0.0,
+                ),
+            ));
+        }
+    }
+}
+#[derive(Resource)]
+struct WorldMap {
+    voronoi: Voronoi,
+    cell_height: HashMap<CellId, f32>,
 }
 fn do_things<R: Rng + Clone>(
     width: f64,
@@ -109,7 +177,7 @@ fn do_things<R: Rng + Clone>(
     ocean_count: usize,
     ocean_size: usize,
     mut rng: &mut R,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<WorldMap> {
     let fbm = Fbm::<Perlin>::new(rng.next_u32());
     let ridged_multi = RidgedMulti::<Perlin>::new(rng.next_u32());
     let my_voronoi = generate(&mut rng, width, height, plate_count * plate_size)?;
@@ -326,15 +394,18 @@ fn do_things<R: Rng + Clone>(
         .enumerate()
         .map(|(i, c)| (c.id, h[i]))
         .collect::<HashMap<CellId, f32>>();
-    svg::render(
-        width,
-        height,
-        &continents_voronoi,
-        &continents,
-        cells_height,
-        "continents_voronoi_merged.svg",
-    )?;
-    Ok(())
+    // svg::render(
+    //     width,
+    //     height,
+    //     &continents_voronoi,
+    //     &continents,
+    //     cells_height,
+    //     "continents_voronoi_merged.svg",
+    // )?;
+    Ok(WorldMap {
+        voronoi: continents_voronoi,
+        cell_height: cells_height,
+    })
 }
 pub fn normalize_split01_in_place(v: &mut [f32]) -> Option<(f32, f32)> {
     // 1) Scan finite min/max
