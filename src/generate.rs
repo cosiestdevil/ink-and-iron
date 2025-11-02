@@ -2,7 +2,7 @@ use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
     hash::Hash,
-    ops::Deref,
+    ops::Deref, usize,
 };
 
 use bevy::prelude::*;
@@ -238,7 +238,7 @@ pub fn generate_world<R: Rng + Clone>(
         }) {
             *p.0
         } else {
-            PlateId(hull_plates.keys().len()-1)
+            PlateId(usize::MAX)
         };
         let cell = Cell {
             id: cell_id,
@@ -278,7 +278,7 @@ pub fn generate_world<R: Rng + Clone>(
     }
     println!("plates: {:?}",plate_to_cells.keys());
     
-    let mut plates = vec![];
+    let mut plates = HashMap::new();
     for (plateid, cells) in plate_to_cells {
         let crust = if most_common_bool(cells.iter().map(|c| continents.contains_key(c))) {
             Crust::Continental
@@ -294,7 +294,7 @@ pub fn generate_world<R: Rng + Clone>(
             age_myr: rng.sample(Uniform::new(120.0, 3000.0).unwrap()),
             buoyancy: 0.0,
         };
-        plates.push(plate);
+        plates.insert(plateid,plate);
     }
 
     let noise_scale = 50.0;
@@ -519,7 +519,7 @@ fn signed_coast_distance(cells: &[Cell]) -> Vec<f32> {
         })
         .collect()
 }
-fn classify_boundaries(cells: &[Cell], plates: &[Plate]) -> Vec<BoundaryEdge> {
+fn classify_boundaries(cells: &[Cell], plates: &HashMap<PlateId,Plate>) -> Vec<BoundaryEdge> {
     let mut edges = Vec::<BoundaryEdge>::new();
     let mut seen = std::collections::HashSet::<(CellId, CellId)>::new();
 
@@ -527,8 +527,8 @@ fn classify_boundaries(cells: &[Cell], plates: &[Plate]) -> Vec<BoundaryEdge> {
         for &n in &c.neighbors {
             let (a, b) = (c.id, n);
             if a.0 < b.0 && cells[a.0].plate != cells[b.0].plate && seen.insert((a, b)) {
-                let pa = &plates[cells[a.0].plate.0];
-                let pb = &plates[cells[b.0].plate.0];
+                let pa = plates.get(&cells[a.0].plate).unwrap();
+                let pb = plates.get(&cells[b.0].plate).unwrap();
                 let v_rel = pa.vel - pb.vel;
                 let n_ab = (cells[a.0].pos - cells[b.0].pos).normalize(); // b->a
 
@@ -813,7 +813,7 @@ fn laplacian_smooth(cells: &[Cell], h: &mut [f32], iters: usize) {
 }
 fn assemble_height(
     cells: &[Cell],
-    plates: &[Plate],
+    plates: &HashMap<PlateId,Plate>,
     fields: &Fields,
     noise: &mut impl FnMut(glam::Vec2) -> (f32, f32), // returns (fbm, ridged)
     p: &Params,
@@ -823,7 +823,7 @@ fn assemble_height(
 
     // 1) Base crust
     for (i, c) in cells.iter().enumerate() {
-        let plate = &plates[c.plate.0];
+        let plate = &plates[&c.plate];
         let base = match plate.crust {
             Crust::Continental => p.a_cont,
             Crust::Oceanic => {
@@ -834,7 +834,7 @@ fn assemble_height(
         h[i] = base;
     }
     for (i, c) in cells.iter().enumerate() {
-        let plate = &plates[c.plate.0];
+        let plate = &plates[&c.plate];
         h[i] = if c.is_ocean {
             p.a_ocean - 0.6 * plate.age_myr.min(120.0)
         } else {
@@ -959,7 +959,7 @@ fn carve_rivers(cells: &[Cell], h: &mut [f32], threshold: usize) {
 }
 fn generate_heightmap(
     cells: &[Cell],
-    plates: Vec<Plate>,
+    plates: HashMap<PlateId,Plate>,
     mut noise: impl FnMut(glam::Vec2) -> (f32, f32),
 ) -> Vec<f32> {
     // Distances
