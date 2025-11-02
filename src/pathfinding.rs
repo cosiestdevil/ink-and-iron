@@ -128,11 +128,11 @@ fn reconstruct_path(current: AStarNode) -> Vec<CellId> {
         path.push(node.cell_id);
         current = node.parent;
     }
-    path.reverse();
+    //path.reverse();
     path
 }
 
-trait ToVec2 {
+pub trait ToVec2 {
     fn to_vec2(&self) -> Vec2;
     fn to_vec3(&self, z: f32) -> Vec3;
 }

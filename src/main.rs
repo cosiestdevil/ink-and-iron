@@ -1,11 +1,16 @@
-use crate::generate::{CellId, WorldMap};
-use bevy::{ecs::relationship::RelationshipSourceCollection, prelude::*};
+#![allow(clippy::too_many_arguments)]
+use crate::{
+    generate::{CellId, WorldMap},
+    pathfinding::ToVec2,
+};
+use bevy::prelude::*;
 use bevy_pancam::{PanCam, PanCamPlugin};
 use clap::Parser;
 use colorgrad::Gradient;
+use geo::scale;
 use glam::Vec2;
 use num::Num;
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng, distr::Uniform};
 use rand_chacha::ChaCha20Rng;
 
 mod generate;
@@ -63,27 +68,26 @@ fn main() -> anyhow::Result<()> {
             PanCamPlugin,
             MeshPickingPlugin,
         ))
+        .insert_resource(Random(rng))
         .insert_resource(SelectedCell(None))
+        .insert_resource(SelectedUnit(None))
         .insert_resource(a)
         .add_systems(Startup, startup)
+        .add_systems(Update, (set_unit_next_cell, move_unit))
         .run();
     Ok(())
 }
+
+#[derive(Resource)]
+struct Random<R: Rng>(R);
 fn startup(
     mut commands: Commands,
     world_map: Res<WorldMap>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut random: ResMut<Random<ChaCha20Rng>>,
 ) {
-    let scale = 500.0;
-    commands.spawn((
-        Camera2d,
-        Transform::from_xyz(8.0 * scale, 4.5 * scale, 0.0),
-        PanCam {
-            max_scale: 1.0,
-            ..default()
-        },
-    ));
+    let scale = world_map.scale;
 
     let g = colorgrad::GradientBuilder::new()
         .css("#001a33 0%, #003a6b 18%, #0f7a8a 32%, #bfe9e9 42%, #f2e6c8 48%, #e8d7a1 52%, #a7c88a 62%, #5b7f3a 72%, #8c8f93 85%, #cdd2d8 93%, #ffffff 100%   ")
@@ -102,10 +106,12 @@ fn startup(
             })
             .collect::<Vec<_>>();
         vertices.reverse();
+        
         if let Ok(polygon) = bevy::math::primitives::ConvexPolygon::new(vertices.clone()) {
             let mesh_id = meshes.add(polygon);
             let color = g.at(*world_map.cell_height.get(&CellId(v_cell.site())).unwrap());
             let color = bevy::color::Color::srgb(color.r, color.g, color.b);
+            vertices.push(*vertices.first().unwrap());
             let polyline = bevy::math::primitives::Polyline2d::new(vertices);
             let outline_mesh_id = meshes.add(polyline);
             let mut cell = commands.spawn((
@@ -128,63 +134,205 @@ fn startup(
                 MeshMaterial2d(materials.add(bevy::color::Color::BLACK)),
                 Transform::from_xyz(0.0, 0.0, 1.0),
             ));
-            cell.observe(
-                |mut event: On<Pointer<Click>>,
-                 cells: Query<&Cell>,
-                 mut selected: ResMut<SelectedCell>| {
-                    if event.button == PointerButton::Primary {
-                        selected.0 = Some(cells.get(event.entity).unwrap().cell_id);
-                        event.propagate(false);
-                    }
-                },
-            )
-            .observe(over_cell);
+            cell.observe(click_cell).observe(over_cell);
 
             //let outline = commands.spawn().id();
             //cell.add_child(outline);
         }
     }
-    fn over_cell(
-        mut event: On<Pointer<Over>>,
-        cells: Query<(&Cell, Entity)>,
-        highlights: Query<Entity, With<CellHighlight>>,
-        selected: Res<SelectedCell>,
-        world_map: Res<WorldMap>,
-        mut commands: Commands,
-        mut materials: ResMut<Assets<ColorMaterial>>,
-    ) {
-        let (graph, nodes) = pathfinding::get_graph(world_map.voronoi.clone(),world_map.cell_height.clone());
-        if let Some(start) = selected.0 {
-            for e in highlights.iter() {
-                let mut e = commands.entity(e);
-                e.despawn();
+
+    let mut pos = random
+        .0
+        .sample(Uniform::<Vec2>::new(Vec2::ZERO, Vec2::new(16.0 * scale, 9.0 * scale)).unwrap());
+    let cell_id = world_map.get_cell_for_position(pos);
+    if let Some(cell_id) = cell_id {
+        pos = world_map.voronoi.cell(cell_id.0).site_position().to_vec2() * scale;
+        let unit_mesh = meshes.add(Circle::new(5.0));
+        let mut unit = commands.spawn((
+            Mesh2d(unit_mesh),
+            MeshMaterial2d(materials.add(Color::hsl(360.0, 0.95, 0.7))),
+            Transform::from_translation(pos.extend(3.0)),
+            Unit {
+                current_cell: cell_id,
+                next_cell: None,
+                goal: None,
+                move_timer: None,
+            },
+        ));
+        unit.observe(click_unit);
+    } else {
+        info!("Couldn't find cell at {}", pos);
+    }
+
+    commands.spawn((
+        Camera2d,
+        Transform::from_translation(pos.extend(0.0)),
+        //Transform::from_xyz(8.0 * scale, 4.5 * scale, 0.0),
+        PanCam {
+            //max_scale: 1.0,
+            ..default()
+        },
+    ));
+}
+
+fn set_unit_next_cell(mut units: Query<&mut Unit>, world_map: Res<WorldMap>) {
+    for mut unit in units.iter_mut() {
+        if let Some(goal) = unit.goal {
+            if unit.current_cell == goal {
+                unit.goal = None;
+                info!("Unit reached goal");
+                continue;
             }
-            let goal = cells.get(event.entity).unwrap().0.cell_id;
-            let result = pathfinding::a_star(start, goal, graph, nodes, world_map.voronoi.clone());
-            if let Some(result) = result {
-                for cell_id in result {
-                    let cell = cells.iter().find(|e| e.0.cell_id == cell_id);
-                    if let Some((cell, entity)) = cell {
-                        let mut e = commands.entity(entity);
-                        e.with_child((
-                            Mesh2d(cell.outline.clone()),
-                            MeshMaterial2d(materials.add(bevy::color::Color::WHITE)),
-                            Transform::from_xyz(0.0, 0.0, 2.0),
-                            CellHighlight,
-                        ));
+            if unit.next_cell.is_none() {
+                let (graph, nodes) = pathfinding::get_graph(
+                    world_map.voronoi.clone(),
+                    world_map.cell_height.clone(),
+                );
+                let result = pathfinding::a_star(
+                    unit.current_cell,
+                    goal,
+                    graph,
+                    nodes,
+                    world_map.voronoi.clone(),
+                );
+                match result {
+                    Some(mut result) => {
+                        let nex_cell = result.pop();
+                        let nex_cell = result.pop();
+                        if let Some(nex_cell) = nex_cell {
+                            unit.next_cell = Some(nex_cell);
+                            unit.move_timer = Some(Timer::from_seconds(5.0, TimerMode::Once));
+                            info!("Set unit next_cell");
+                        }
                     }
+                    None => unit.goal = None,
                 }
             }
-            event.propagate(false);
         }
     }
 }
+fn move_unit(
+    mut units: Query<(&mut Unit, &mut Transform)>,
+    world_map: Res<WorldMap>,
+    time: Res<Time>,
+) {
+    for (mut unit, mut transform) in units.iter_mut() {
+        if let Some(next_cell) = unit.next_cell {
+            if unit.current_cell == next_cell {
+                unit.next_cell = None;
+                continue;
+            }
+            let current_cell = unit.current_cell.0;
+            let move_timer = unit.move_timer.as_mut().unwrap();
+            move_timer.tick(time.delta());
+
+            let next_cell_pos = world_map
+                .voronoi
+                .cell(next_cell.0)
+                .site_position()
+                .to_vec2()* world_map.scale;
+            if move_timer.is_finished() {
+                *transform = Transform::from_translation(next_cell_pos.extend(3.0));
+                unit.current_cell = next_cell;
+                unit.next_cell = None;
+            } else {
+                let current_cell_pos = world_map
+                    .voronoi
+                    .cell(current_cell)
+                    .site_position()
+                    .to_vec2() * world_map.scale;
+                let new_pos = current_cell_pos.lerp(next_cell_pos, move_timer.fraction());
+                *transform = Transform::from_translation(new_pos.extend(3.0));
+            }
+        }
+    }
+}
+fn click_unit(mut event: On<Pointer<Click>>, mut selected_unit: ResMut<SelectedUnit>) {
+    if event.button == PointerButton::Primary {
+        selected_unit.0 = Some(event.entity);
+        event.propagate(false);
+    }
+}
+fn click_cell(
+    mut event: On<Pointer<Click>>,
+    cells: Query<&Cell>,
+    mut units: Query<&mut Unit>,
+    selected_unit: Res<SelectedUnit>,
+) {
+    if event.button == PointerButton::Primary {
+        match selected_unit.0 {
+            None => {}
+            Some(unit) => {
+                if let Ok(cell) = cells.get(event.entity) {
+                    let mut unit = units.get_mut(unit).unwrap();
+                    unit.goal = Some(cell.cell_id);
+                    info!("Set unit's goal");
+                }
+            }
+        }
+        event.propagate(false);
+    }
+}
+fn over_cell(
+    mut event: On<Pointer<Over>>,
+    cells: Query<(&Cell, Entity)>,
+    units: Query<&Unit>,
+    highlights: Query<(Entity, &CellHighlight)>,
+    selected: Res<SelectedUnit>,
+    world_map: Res<WorldMap>,
+    mut commands: Commands,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    let (graph, nodes) =
+        pathfinding::get_graph(world_map.voronoi.clone(), world_map.cell_height.clone());
+    if let Some(unit_entity) = selected.0 {
+        for (e, highlight) in highlights.iter() {
+            let mut e = commands.entity(e);
+            e.despawn();
+        }
+        let unit = units.get(unit_entity).unwrap();
+        let start = unit.current_cell;
+        let goal = cells.get(event.entity).unwrap().0.cell_id;
+        let result = pathfinding::a_star(start, goal, graph, nodes, world_map.voronoi.clone());
+        if let Some(result) = result {
+            for cell_id in result {
+                let cell = cells.iter().find(|e| e.0.cell_id == cell_id);
+                if let Some((cell, entity)) = cell {
+                    let mut e = commands.entity(entity);
+                    e.with_child((
+                        Mesh2d(cell.outline.clone()),
+                        MeshMaterial2d(materials.add(bevy::color::Color::WHITE)),
+                        Transform::from_xyz(0.0, 0.0, 2.0),
+                        CellHighlight {
+                            unit: Some(unit_entity),
+                        },
+                    ));
+                }
+            }
+        }
+        event.propagate(false);
+    }
+}
+
 #[derive(Component)]
 struct Cell {
     pub cell_id: CellId,
     outline: Handle<Mesh>,
 }
 #[derive(Component)]
-struct CellHighlight;
+struct CellHighlight {
+    unit: Option<Entity>,
+}
 #[derive(Resource)]
 struct SelectedCell(Option<CellId>);
+
+#[derive(Resource)]
+struct SelectedUnit(Option<Entity>);
+
+#[derive(Component)]
+struct Unit {
+    current_cell: CellId,
+    next_cell: Option<CellId>,
+    goal: Option<CellId>,
+    move_timer: Option<Timer>,
+}

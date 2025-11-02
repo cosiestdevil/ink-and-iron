@@ -23,8 +23,20 @@ pub struct PlateId(usize);
 pub struct ContinentId(usize);
 #[derive(Resource)]
 pub struct WorldMap {
+    pub scale: f32,
     pub voronoi: Voronoi,
     pub cell_height: HashMap<CellId, f32>,
+    polygons: HashMap<CellId, geo::Polygon>,
+}
+impl WorldMap {
+    pub fn get_cell_for_position(&self, pos: Vec2) -> Option<CellId> {
+        for (cell_id, poly) in self.polygons.iter() {
+            if poly.contains(&geo::point!(x:(pos.x/self.scale) as f64,y:(pos.y/self.scale) as f64)) {
+                return Some(*cell_id);
+            }
+        }
+        None
+    }
 }
 impl Deref for CellId {
     type Target = usize;
@@ -60,6 +72,7 @@ pub struct WorldGenerationParams {
     continent_size: usize,
     ocean_count: usize,
     ocean_size: usize,
+    scale:f32
 }
 impl From<&crate::Args> for WorldGenerationParams {
     fn from(value: &crate::Args) -> Self {
@@ -72,6 +85,7 @@ impl From<&crate::Args> for WorldGenerationParams {
             continent_size: value.continent_size,
             ocean_count: value.ocean_count,
             ocean_size: value.ocean_size,
+            scale:500.0,
         }
     }
 }
@@ -89,6 +103,7 @@ pub fn generate_world<R: Rng + Clone>(
         continent_size,
         ocean_count,
         ocean_size,
+        scale
     } = params;
     let fbm = Fbm::<Perlin>::new(rng.next_u32());
     let ridged_multi = RidgedMulti::<Perlin>::new(rng.next_u32());
@@ -112,8 +127,7 @@ pub fn generate_world<R: Rng + Clone>(
             }
         }
     }
-    let plates_to_cells: HashMap<PlateId, Vec<CellId>> =
-        crate::helpers::invert_borrowed(&plates);
+    let plates_to_cells: HashMap<PlateId, Vec<CellId>> = crate::helpers::invert_borrowed(&plates);
     let mut hull_plates: HashMap<PlateId, geo::Polygon> = HashMap::new();
     for plate in plates_to_cells.keys() {
         let mut polygons: Vec<Polygon> = vec![];
@@ -215,7 +229,8 @@ pub fn generate_world<R: Rng + Clone>(
     let neighbours = build_neighbors_from_voronoi(&continents_voronoi);
     let mut cells: Vec<Cell> = Vec::new();
     let mut plate_to_cells: HashMap<PlateId, Vec<CellId>> = HashMap::new();
-    let last_plate = plates_to_cells.keys().map(|p|p.0).max().unwrap();
+    
+    let mut cell_polys = HashMap::new();
     for v_cell in continents_voronoi.iter_cells() {
         let cell_id = CellId(v_cell.site());
         let plate = if let Some(p) = hull_plates.iter().find(|(_k, v)| {
@@ -223,7 +238,7 @@ pub fn generate_world<R: Rng + Clone>(
         }) {
             *p.0
         } else {
-            PlateId(last_plate)
+            PlateId(hull_plates.keys().len()-1)
         };
         let cell = Cell {
             id: cell_id,
@@ -250,7 +265,19 @@ pub fn generate_world<R: Rng + Clone>(
             plate_to_cells.insert(cell.plate, vec![cell_id]);
         }
         cells.push(cell);
+        let poly = geo::Polygon::new(
+            geo::LineString::from(
+                v_cell
+                    .iter_vertices()
+                    .map(|p| geo::Coord { x: p.x, y: p.y })
+                    .collect::<Vec<_>>(),
+            ),
+            vec![],
+        );
+        cell_polys.insert(cell_id, poly);
     }
+    println!("plates: {:?}",plate_to_cells.keys());
+    
     let mut plates = vec![];
     for (plateid, cells) in plate_to_cells {
         let crust = if most_common_bool(cells.iter().map(|c| continents.contains_key(c))) {
@@ -274,8 +301,7 @@ pub fn generate_world<R: Rng + Clone>(
     let mut h = generate_heightmap(&cells, plates, |p| {
         // Simple FBM + ridged noise
         let a = fbm.get([p.x as f64 * noise_scale, p.y as f64 * noise_scale]) as f32 * 0.5;
-        let b =
-            ridged_multi.get([p.x as f64 * noise_scale, p.y as f64 * noise_scale]) as f32 * 1.0;
+        let b = ridged_multi.get([p.x as f64 * noise_scale, p.y as f64 * noise_scale]) as f32 * 1.0;
         (a, b)
     });
     println!(
@@ -303,8 +329,10 @@ pub fn generate_world<R: Rng + Clone>(
     //     "continents_voronoi_merged.svg",
     // )?;
     Ok(WorldMap {
+        scale,
         voronoi: continents_voronoi,
         cell_height: cells_height,
+        polygons: cell_polys,
     })
 }
 pub fn normalize_split01_in_place(v: &mut [f32]) -> Option<(f32, f32)> {
@@ -828,8 +856,7 @@ fn assemble_height(
             h[i] += p.a_trench * (-(x / p.sigma_tr).powi(2)).exp();
         } else {
             let x = fields.d_conv_land_side[i];
-            h[i] +=
-                p.a_arc * (-((x - p.delta_arc).powi(2)) / (p.sigma_arc * p.sigma_arc)).exp();
+            h[i] += p.a_arc * (-((x - p.delta_arc).powi(2)) / (p.sigma_arc * p.sigma_arc)).exp();
         }
 
         // MOR
@@ -938,16 +965,21 @@ fn generate_heightmap(
     // Distances
     let d_coast = signed_coast_distance(cells);
     let edges = classify_boundaries(cells, &plates);
-    let BoundaryDistances{conv, div, tr, conv_ocean, conv_land} =
-        distance_to_boundary(cells, &edges);
+    let BoundaryDistances {
+        conv,
+        div,
+        tr,
+        conv_ocean,
+        conv_land,
+    } = distance_to_boundary(cells, &edges);
 
     let fields = Fields {
         d_coast,
-        d_conv:conv,
-        d_div:div,
-        d_tr:tr,
-        d_conv_ocean_side:conv_ocean,
-        d_conv_land_side:conv_land,
+        d_conv: conv,
+        d_div: div,
+        d_tr: tr,
+        d_conv_ocean_side: conv_ocean,
+        d_conv_land_side: conv_land,
     };
 
     // Height layers
