@@ -15,6 +15,8 @@ use rand::{
 };
 use voronoice::*;
 
+use crate::pathfinding::ToVec2;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CellId(pub usize);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -36,6 +38,10 @@ impl WorldMap {
             }
         }
         None
+    }
+    pub fn get_position_for_cell(&self, id:CellId)->Vec2{
+        let cell = self.voronoi.cell(id.0);
+        cell.site_position().to_vec2() * self.scale
     }
 }
 impl Deref for CellId {
