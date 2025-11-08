@@ -1,5 +1,5 @@
 #![allow(clippy::too_many_arguments)]
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use crate::{
     generate::{CellId, WorldMap},
@@ -7,16 +7,25 @@ use crate::{
     pathfinding::ToVec2,
 };
 use bevy::{
-    camera::{Viewport, visibility::RenderLayers}, color::palettes::css::BLACK, ecs::{system::SystemState, world::CommandQueue}, math::VectorSpace, prelude::*, render::render_resource::BlendState, tasks::{AsyncComputeTaskPool, Task, block_on, futures_lite::future}, window::PrimaryWindow
+    camera::{Viewport, visibility::RenderLayers},
+    color::palettes::css::BLACK,
+    ecs::system::SystemState,
+    prelude::*,
+    render::render_resource::BlendState,
+    window::PrimaryWindow,
 };
 use bevy_egui::{
     EguiContext, EguiContexts, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass,
     PrimaryEguiContext,
     egui::{self, Ui},
 };
+use bevy_kira_audio::prelude::*;
 use bevy_pancam::{PanCam, PanCamPlugin};
 use bevy_prototype_lyon::{
-    entity::Shape, plugin::ShapePlugin, prelude::{ShapeBuilder, ShapeBuilderBase}, shapes::{Circle, RegularPolygon}
+    entity::Shape,
+    plugin::ShapePlugin,
+    prelude::{ShapeBuilder, ShapeBuilderBase},
+    shapes::{Circle, RegularPolygon},
 };
 use bevy_tokio_tasks::TokioTasksRuntime;
 use clap::Parser;
@@ -80,15 +89,16 @@ fn main() -> anyhow::Result<()> {
     App::new()
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
-                                primary_window: Some(Window {
-                                    present_mode: bevy::window::PresentMode::AutoNoVsync,
-                                    ..default()
-                                }),
-                                ..default()
-                            }),
+                primary_window: Some(Window {
+                    present_mode: bevy::window::PresentMode::AutoNoVsync,
+                    ..default()
+                }),
+                ..default()
+            }),
             PanCamPlugin,
             MeshPickingPlugin,
             ShapePlugin,
+            AudioPlugin,
         ))
         .add_plugins(bevy_tokio_tasks::TokioTasksPlugin::default())
         .add_plugins(EguiPlugin::default())
@@ -98,7 +108,7 @@ fn main() -> anyhow::Result<()> {
         .insert_resource(Random(rng))
         .insert_resource(Selection::None)
         .insert_resource(a)
-        .add_systems(Startup, generate_settlement_name)
+        .add_systems(Startup, (generate_settlement_name, start_background_audio))
         .add_systems(OnEnter(AppState::InGame), startup)
         .add_systems(
             Update,
@@ -149,7 +159,16 @@ fn temp(
         }
     }
 }
-
+fn start_background_audio(asset_server: Res<AssetServer>, audio: Res<Audio>) {
+    audio
+        .play(asset_server.load("sounds/Pixel Kingdom.wav"))
+        .fade_in(AudioTween::new(
+            Duration::from_secs(2),
+            AudioEasing::InPowi(2),
+        ))
+        .with_volume(-20.)
+        .looped();
+}
 fn deselect(
     mut commands: Commands,
     highlights: Query<Entity, With<CellHighlight>>,
@@ -280,15 +299,21 @@ fn startup(
         let cell_id = world_map.get_cell_for_position(pos);
         if let Some(cell_id) = cell_id {
             pos = world_map.voronoi.cell(cell_id.0).site_position().to_vec2() * scale;
-            let settlement_mesh = ShapeBuilder::with(&RegularPolygon{
-                sides:4,
-                center:Vec2::ZERO,
-                feature:bevy_prototype_lyon::shapes::RegularPolygonFeature::SideLength(10.0)
-            }).fill(player.color).stroke((BLACK,1.0)).build();
-            let unit_mesh = ShapeBuilder::with(&Circle{
-                radius:5.0,
-                center:Vec2::ZERO
-            }).fill(player.color).stroke((BLACK,1.0)).build();
+            let settlement_mesh = ShapeBuilder::with(&RegularPolygon {
+                sides: 4,
+                center: Vec2::ZERO,
+                feature: bevy_prototype_lyon::shapes::RegularPolygonFeature::SideLength(10.0),
+            })
+            .fill(player.color)
+            .stroke((BLACK, 1.0))
+            .build();
+            let unit_mesh = ShapeBuilder::with(&Circle {
+                radius: 5.0,
+                center: Vec2::ZERO,
+            })
+            .fill(player.color)
+            .stroke((BLACK, 1.0))
+            .build();
             let name = player
                 .settlement_names
                 .pop()

@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
-bevy = { version = "0.17.2", features = ["wayland"] }
+
 bevy_egui = "0.38.0"
 bevy_pancam = "0.19.0"
 clap = { version = "4.5", features = ["derive"] }
@@ -28,6 +28,59 @@ bevy-tokio-tasks = "0.17.0"
 lazy_static = "1.5.0"
 tokio = { version = "1.48.0", features = ["full"] }
 bevy_prototype_lyon = "0.15.0"
+bevy_kira_audio = { version = "0.24.0", features = ["wav"] }
+
+[dependencies.bevy]
+version = "0.17.2"
+default-features = false
+features = ["std",
+    "async_executor",
+    "animation",
+    "bevy_asset",
+    "bevy_color",
+    "bevy_core_pipeline",
+    "bevy_post_process",
+    "bevy_anti_alias",
+    "bevy_gilrs",
+    "bevy_gizmos",
+    "bevy_gltf",
+    "bevy_input_focus",
+    "bevy_log",
+    "bevy_mesh_picking_backend",
+    "bevy_pbr",
+    "bevy_picking",
+    "bevy_render",
+    "bevy_scene",
+    "bevy_image",
+    "bevy_mesh",
+    "bevy_camera",
+    "bevy_light",
+    "bevy_shader",
+    "bevy_sprite",
+    "bevy_sprite_picking_backend",
+    "bevy_sprite_render",
+    "bevy_state",
+    "bevy_text",
+    "bevy_ui",
+    "bevy_ui_picking_backend",
+    "bevy_ui_render",
+    "bevy_window",
+    "bevy_winit",
+    "custom_cursor",
+    "default_font",
+    "hdr",
+    "ktx2",
+    "multi_threaded",
+    "png",
+    "reflect_auto_register",
+    "smaa_luts",
+    "sysinfo_plugin",
+    "tonemapping_luts",
+    "webgl2",
+    "x11",
+    "wayland",
+    "debug",
+    "zstd_rust",]
 
 [profile.dev.package."*"]
 opt-level = 3
