@@ -35,7 +35,7 @@ jobs:
     env:
       VERSION: ${{needs.get-version.outputs.version}}
       BUILD_INSTALLER: ${{ false }}
-      CUDA_COMPUTE_CAP: "7.5"
+      CUDA_COMPUTE_CAP: "75"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
