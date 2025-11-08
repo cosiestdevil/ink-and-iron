@@ -1,5 +1,7 @@
 use bevy::{asset::Asset, log::info, reflect::TypePath};
-use kalosm::language::*;
+use kalosm_language::{prelude::{Parse, Schema}, *};
+use kalosm_llama::{prelude::{ChatModelExt, GenerationParameters}, *};
+use kalosm_model_types::FileSource;
 use serde::{Deserialize, Serialize};
 use tokio::sync::OnceCell;
 

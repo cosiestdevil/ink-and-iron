@@ -1,0 +1,71 @@
+name: release-flow
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version - in the form of v1.2.3"
+        required: true
+        type: string
+
+# ToDo: adapt names
+env:
+  # This variable is used to name release output files.
+  GAME_EXECUTABLE_NAME: ink-and-iron
+
+permissions:
+  contents: write
+
+jobs:
+  get-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get tag
+        id: tag
+        run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+    outputs:
+      version: ${{ inputs.version || steps.tag.outputs.tag }}
+
+  build-windows:
+    runs-on: windows-latest
+    needs: get-version
+    env:
+      VERSION: ${{needs.get-version.outputs.version}}
+      BUILD_INSTALLER: ${{ false }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+      - uses: Jimver/cuda-toolkit@v0.2.29
+        id: cuda-toolkit
+        with:
+          cuda: "12.9.0"
+      - name: Download LLM Models
+        run: |
+          ./download_models.ps1
+      - name: Build release
+        run: |
+          cargo build --profile release
+      - name: Prepare release
+        run: |
+          mkdir target/release/assets && cp -r assets target/release/assets
+          mkdir target/release/credits && cp -r credits target/release/credits
+      - name: Zip release
+        uses: vimtor/action-zip@v1.1
+        with:
+          files: target/release/assets/ target/release/credits/ target/release/${{ env.GAME_EXECUTABLE_NAME }}.exe
+          dest: ${{ env.GAME_EXECUTABLE_NAME }}_windows.zip
+      - name: Upload release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ env.GAME_EXECUTABLE_NAME }}_windows.zip
+          asset_name: ${{ env.GAME_EXECUTABLE_NAME }}_${{ env.VERSION }}_windows.zip
+          tag: ${{ env.VERSION }}
+          overwrite: true
