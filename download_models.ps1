@@ -1,0 +1,1 @@
+hf download --local-dir assets/llm/llama lmstudio-community/Llama-3.2-3B-Instruct-GGUF Llama-3.2-3B-Instruct-Q4_K_M.gguf

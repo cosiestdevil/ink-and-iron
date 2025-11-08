@@ -3,19 +3,24 @@ use std::collections::HashMap;
 
 use crate::{
     generate::{CellId, WorldMap},
+    llm::SettlementNameCtx,
     pathfinding::ToVec2,
 };
 use bevy::{
     camera::{Viewport, visibility::RenderLayers},
+    ecs::{system::SystemState, world::CommandQueue},
     prelude::*,
     render::render_resource::BlendState,
+    tasks::{AsyncComputeTaskPool, Task, block_on, futures_lite::future},
     window::PrimaryWindow,
 };
 use bevy_egui::{
     EguiContext, EguiContexts, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass,
-    PrimaryEguiContext, egui::{self, Ui},
+    PrimaryEguiContext,
+    egui::{self, Ui},
 };
 use bevy_pancam::{PanCam, PanCamPlugin};
+use bevy_tokio_tasks::TokioTasksRuntime;
 use clap::Parser;
 use colorgrad::Gradient;
 use glam::Vec2;
@@ -24,6 +29,7 @@ use rand::{Rng, SeedableRng, distr::Uniform};
 use rand_chacha::ChaCha20Rng;
 mod generate;
 mod helpers;
+mod llm;
 mod pathfinding;
 
 #[derive(Parser, Debug)]
@@ -47,6 +53,12 @@ struct Args {
     #[arg(long)]
     seed: Option<String>,
 }
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
+enum AppState {
+    #[default]
+    Loading,
+    InGame,
+}
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let mut rng = match args.seed {
@@ -66,6 +78,7 @@ fn main() -> anyhow::Result<()> {
     let num = num::BigUint::from_bytes_le(&seed);
     let seed = num.to_str_radix(36);
     println!("Seed: {}", seed);
+
     App::new()
         .add_plugins((
             DefaultPlugins, /*.set(WindowPlugin {
@@ -78,13 +91,16 @@ fn main() -> anyhow::Result<()> {
             PanCamPlugin,
             MeshPickingPlugin,
         ))
+        .add_plugins(bevy_tokio_tasks::TokioTasksPlugin::default())
         .add_plugins(EguiPlugin::default())
         .add_message::<TurnStart>()
+        .init_state::<AppState>()
         .insert_resource(GameState::new(2))
         .insert_resource(Random(rng))
         .insert_resource(Selection::None)
         .insert_resource(a)
-        .add_systems(Startup, startup)
+        .add_systems(Startup, generate_settlement_name)
+        .add_systems(OnEnter(AppState::InGame), startup)
         .add_systems(
             Update,
             (
@@ -94,11 +110,21 @@ fn main() -> anyhow::Result<()> {
                 temp,
                 construct_unit,
                 reset_turn_ready_to_end,
-            ),
+            )
+                .run_if(in_state(AppState::InGame)),
         )
-        .add_systems(FixedUpdate, set_unit_next_cell)
-        .add_systems(FixedPostUpdate, check_if_turn_ready_to_end)
-        .add_systems(EguiPrimaryContextPass, ui_example_system)
+        .add_systems(
+            FixedUpdate,
+            set_unit_next_cell.run_if(in_state(AppState::InGame)),
+        )
+        .add_systems(
+            FixedPostUpdate,
+            check_if_turn_ready_to_end.run_if(in_state(AppState::InGame)),
+        )
+        .add_systems(
+            EguiPrimaryContextPass,
+            ui_example_system.run_if(in_state(AppState::InGame)),
+        )
         .run();
     Ok(())
 }
@@ -125,10 +151,15 @@ fn temp(
     }
 }
 
-fn deselect(mut commands: Commands, highlights: Query<Entity, With<CellHighlight>>,keyboard: Res<ButtonInput<KeyCode>>,mut selected: ResMut<Selection>){
-    if keyboard.just_pressed(KeyCode::Escape){
+fn deselect(
+    mut commands: Commands,
+    highlights: Query<Entity, With<CellHighlight>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut selected: ResMut<Selection>,
+) {
+    if keyboard.just_pressed(KeyCode::Escape) {
         *selected = Selection::None;
-        for entity in highlights.iter(){
+        for entity in highlights.iter() {
             let mut highlight = commands.entity(entity);
             highlight.despawn();
         }
@@ -149,6 +180,50 @@ fn construct_unit(
         }
     }
 }
+fn generate_settlement_name(
+    mut rng: ResMut<Random<ChaCha20Rng>>,
+    runtime: ResMut<TokioTasksRuntime>,
+    game_state: Res<GameState>,
+) {
+    let temp = rng.0.random_range(0.3..0.5);
+    for player in game_state.players.values() {
+        let context = player.settlement_context.clone();
+        let player_id = player.id;
+        runtime.spawn_background_task(move |mut ctx| async move {
+            if let Ok(names) = llm::settlement_names(context.clone(), temp).await {
+                ctx.run_on_main_thread(move |ctx| {
+                    let world = ctx.world;
+                    let (mut game_state ,mut next_state)= {
+                        let mut system_state = SystemState::<(ResMut<GameState>,ResMut<NextState<AppState>>)>::new(world);
+                        system_state.get_mut(world)
+                    };
+                    let player = game_state.players.get_mut(&player_id).unwrap();
+                    player.settlement_names = names;
+                    if game_state.players.values().all(|p|!p.settlement_names.is_empty()){
+                        next_state.set(AppState::InGame);
+                    }
+                })
+                .await;
+            }
+        });
+    }
+    //commands.entity(entity).insert(ComputeTransform(task));
+}
+// fn handle_settlement_name_generated(
+//     mut commands: Commands,
+//     mut transform_tasks: Query<(Entity, &mut ComputeTransform)>,
+// ) {
+//     for (entity, mut task) in &mut transform_tasks {
+//         if let Some(mut commands_queue) = block_on(future::poll_once(&mut task.0)) {
+//             // append the returned command queue to have it execute later
+//             commands.append(&mut commands_queue);
+//             // Task is complete, so remove task component from entity
+//             commands.entity(entity).despawn();
+//         }
+//     }
+// }
+#[derive(Component)]
+struct ComputeTransform(Task<CommandQueue>);
 #[derive(Resource)]
 struct Random<R: Rng>(R);
 fn startup(
@@ -223,13 +298,17 @@ fn startup(
             pos = world_map.voronoi.cell(cell_id.0).site_position().to_vec2() * scale;
             let settlement_mesh = meshes.add(Rectangle::new(10.0, 10.0));
             let unit_mesh = meshes.add(Circle::new(5.0));
+            let name = player
+                .settlement_names
+                .pop()
+                .unwrap_or(format!("Settlement: {}", player.id.0));
             let mut settlment = SettlementCenter {
-                name:format!("Settlement - {}",player.id.0),
+                name,
                 controller: player.id,
                 production: 1.0,
                 construction: None,
                 available_constructions: vec![ConstructionJob::Unit(UnitConstuction {
-                    name:"Unit 1".to_string(),
+                    name: "Unit 1".to_string(),
                     cost: 2.0,
                     progress: 0.0,
                     template: UnitTemplate {
@@ -303,7 +382,7 @@ fn ui_example_system(
     window: Single<&mut Window, With<PrimaryWindow>>,
     game_state: Res<GameState>,
     selected: Res<Selection>,
-    mut settlements: Query<&mut SettlementCenter>
+    mut settlements: Query<&mut SettlementCenter>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
     let player = game_state.players.get(&game_state.active_player).unwrap();
@@ -322,22 +401,22 @@ fn ui_example_system(
         .show(ctx, |ui| {
             ui.label("Right resizeable panel");
             match *selected {
-                Selection::None => {},
-                Selection::Unit(entity) => {},
+                Selection::None => {}
+                Selection::Unit(entity) => {}
                 Selection::Settlement(entity) => {
                     let settlement = settlements.get_mut(entity).unwrap();
                     ui.label(settlement.name.clone());
-                    if let Some(ref job) = settlement.construction{
+                    if let Some(ref job) = settlement.construction {
                         job.progress_label(ui);
-                    }else{
+                    } else {
                         ui.label("No Construction Queued");
                     }
-                    for job in settlement.available_constructions.iter(){
+                    for job in settlement.available_constructions.iter() {
                         job.available_label(ui);
                     }
-                },
+                }
             }
-            
+
             ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
         })
         .response
@@ -428,12 +507,10 @@ fn check_if_turn_ready_to_end(
         .filter(|u| u.controller == game_state.active_player)
         .all(|u| (u.goal.is_some() && u.next_cell.is_none()) || u.used_speed > 0.0);
     let player_settlements_busy = settlements
-    .iter()
+        .iter()
         .filter(|u| u.controller == game_state.active_player)
-        .all(|s|s.construction.is_some());
-    if player_units_used && player_settlements_busy
-        && !game_state.turn_ready_to_end
-    {
+        .all(|s| s.construction.is_some());
+    if player_units_used && player_settlements_busy && !game_state.turn_ready_to_end {
         game_state.turn_ready_to_end = true;
         info!(
             "Turn ready to end for player: {:?}",
@@ -475,7 +552,7 @@ fn turn_start(
         }
         info!("Turn started for player: {:?}", turn.player);
         *selected = Selection::None;
-        for entity in highlights.iter(){
+        for entity in highlights.iter() {
             let mut highlight = commands.entity(entity);
             highlight.despawn();
         }
@@ -515,6 +592,8 @@ struct Player {
     color: Color,
     local: bool,
     camera_entity: Option<Entity>,
+    settlement_names: Vec<String>,
+    settlement_context: SettlementNameCtx,
 }
 #[derive(Resource)]
 struct GameState {
@@ -525,15 +604,16 @@ struct GameState {
 impl GameState {
     fn new(player_count: usize) -> Self {
         let mut players = HashMap::with_capacity(player_count);
+        let civs= ["Luikha Empire","Ishabia Kingdom"];
         for i in 0..player_count {
             let t = (i as f32 / (player_count + 1) as f32);
-            info!("TEMP: {}", t);
             let color = Color::hsl(360.0 * t, 0.95, 0.7);
             let player = Player {
                 order: i,
                 id: PlayerId(i),
                 local: true,
-
+                settlement_names: vec![],
+                settlement_context:SettlementNameCtx { civilisation_name: civs[i].to_string() },
                 camera_entity: None,
                 color,
             };
@@ -768,7 +848,7 @@ struct UnitConstuction {
     cost: f32,
     progress: f32,
     template: UnitTemplate,
-    name:String
+    name: String,
 }
 
 impl Construction for UnitConstuction {
@@ -794,19 +874,25 @@ struct UnitTemplate {
 enum ConstructionJob {
     Unit(UnitConstuction),
 }
-impl ConstructionJob{
-    pub fn progress_label(&self,mut ui:&mut Ui){
-        match self{
+impl ConstructionJob {
+    pub fn progress_label(&self, mut ui: &mut Ui) {
+        match self {
             ConstructionJob::Unit(unit_constuction) => {
-                ui.label(format!("{}: {}/{}",unit_constuction.name,unit_constuction.progress,unit_constuction.cost));
-            },
+                ui.label(format!(
+                    "{}: {}/{}",
+                    unit_constuction.name, unit_constuction.progress, unit_constuction.cost
+                ));
+            }
         }
     }
-    pub fn available_label(&self, ui:&mut Ui){
-        match self{
+    pub fn available_label(&self, ui: &mut Ui) {
+        match self {
             ConstructionJob::Unit(unit_constuction) => {
-                ui.label(format!("{}: {}",unit_constuction.name,unit_constuction.cost));
-            },
+                ui.label(format!(
+                    "{}: {}",
+                    unit_constuction.name, unit_constuction.cost
+                ));
+            }
         }
     }
 }
