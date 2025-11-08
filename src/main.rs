@@ -7,12 +7,7 @@ use crate::{
     pathfinding::ToVec2,
 };
 use bevy::{
-    camera::{Viewport, visibility::RenderLayers},
-    ecs::{system::SystemState, world::CommandQueue},
-    prelude::*,
-    render::render_resource::BlendState,
-    tasks::{AsyncComputeTaskPool, Task, block_on, futures_lite::future},
-    window::PrimaryWindow,
+    camera::{Viewport, visibility::RenderLayers}, color::palettes::css::BLACK, ecs::{system::SystemState, world::CommandQueue}, math::VectorSpace, prelude::*, render::render_resource::BlendState, tasks::{AsyncComputeTaskPool, Task, block_on, futures_lite::future}, window::PrimaryWindow
 };
 use bevy_egui::{
     EguiContext, EguiContexts, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass,
@@ -20,6 +15,9 @@ use bevy_egui::{
     egui::{self, Ui},
 };
 use bevy_pancam::{PanCam, PanCamPlugin};
+use bevy_prototype_lyon::{
+    entity::Shape, plugin::ShapePlugin, prelude::{ShapeBuilder, ShapeBuilderBase}, shapes::{Circle, RegularPolygon}
+};
 use bevy_tokio_tasks::TokioTasksRuntime;
 use clap::Parser;
 use colorgrad::Gradient;
@@ -81,15 +79,16 @@ fn main() -> anyhow::Result<()> {
 
     App::new()
         .add_plugins((
-            DefaultPlugins, /*.set(WindowPlugin {
+            DefaultPlugins.set(WindowPlugin {
                                 primary_window: Some(Window {
-                                    present_mode: bevy::window::PresentMode::Mailbox,
+                                    present_mode: bevy::window::PresentMode::AutoNoVsync,
                                     ..default()
                                 }),
                                 ..default()
-                            })*/
+                            }),
             PanCamPlugin,
             MeshPickingPlugin,
+            ShapePlugin,
         ))
         .add_plugins(bevy_tokio_tasks::TokioTasksPlugin::default())
         .add_plugins(EguiPlugin::default())
@@ -193,13 +192,20 @@ fn generate_settlement_name(
             if let Ok(names) = llm::settlement_names(context.clone(), temp).await {
                 ctx.run_on_main_thread(move |ctx| {
                     let world = ctx.world;
-                    let (mut game_state ,mut next_state)= {
-                        let mut system_state = SystemState::<(ResMut<GameState>,ResMut<NextState<AppState>>)>::new(world);
+                    let (mut game_state, mut next_state) = {
+                        let mut system_state = SystemState::<(
+                            ResMut<GameState>,
+                            ResMut<NextState<AppState>>,
+                        )>::new(world);
                         system_state.get_mut(world)
                     };
                     let player = game_state.players.get_mut(&player_id).unwrap();
                     player.settlement_names = names;
-                    if game_state.players.values().all(|p|!p.settlement_names.is_empty()){
+                    if game_state
+                        .players
+                        .values()
+                        .all(|p| !p.settlement_names.is_empty())
+                    {
                         next_state.set(AppState::InGame);
                     }
                 })
@@ -207,23 +213,7 @@ fn generate_settlement_name(
             }
         });
     }
-    //commands.entity(entity).insert(ComputeTransform(task));
 }
-// fn handle_settlement_name_generated(
-//     mut commands: Commands,
-//     mut transform_tasks: Query<(Entity, &mut ComputeTransform)>,
-// ) {
-//     for (entity, mut task) in &mut transform_tasks {
-//         if let Some(mut commands_queue) = block_on(future::poll_once(&mut task.0)) {
-//             // append the returned command queue to have it execute later
-//             commands.append(&mut commands_queue);
-//             // Task is complete, so remove task component from entity
-//             commands.entity(entity).despawn();
-//         }
-//     }
-// }
-#[derive(Component)]
-struct ComputeTransform(Task<CommandQueue>);
 #[derive(Resource)]
 struct Random<R: Rng>(R);
 fn startup(
@@ -256,38 +246,32 @@ fn startup(
             .collect::<Vec<_>>();
         vertices.reverse();
 
-        if let Ok(polygon) = bevy::math::primitives::ConvexPolygon::new(vertices.clone()) {
-            let mesh_id = meshes.add(polygon);
-            let color = g.at(*world_map.cell_height.get(&CellId(v_cell.site())).unwrap());
-            let color = bevy::color::Color::srgb(color.r, color.g, color.b);
-            vertices.push(*vertices.first().unwrap());
-            let polyline = bevy::math::primitives::Polyline2d::new(vertices);
-            let outline_mesh_id = meshes.add(polyline);
-            let mut cell = commands.spawn((
-                Mesh2d(mesh_id.clone()),
-                MeshMaterial2d(materials.add(color)),
-                Transform::from_xyz(
-                    // Distribute shapes from -X_EXTENT/2 to +X_EXTENT/2.
-                    v_cell.site_position().x as f32 * scale,
-                    v_cell.site_position().y as f32 * scale,
-                    0.0,
-                ),
-                Cell {
-                    cell_id: CellId(v_cell.site()),
-                    outline: outline_mesh_id.clone(),
-                },
-            ));
-
-            cell.with_child((
-                Mesh2d(outline_mesh_id.clone()),
-                MeshMaterial2d(materials.add(bevy::color::Color::BLACK)),
-                Transform::from_xyz(0.0, 0.0, 1.0),
-            ));
-            cell.observe(click_cell).observe(over_cell);
-
-            //let outline = commands.spawn().id();
-            //cell.add_child(outline);
-        }
+        let polygon = bevy_prototype_lyon::prelude::shapes::Polygon {
+            points: vertices.clone(),
+            closed: true,
+        };
+        let color = g.at(*world_map.cell_height.get(&CellId(v_cell.site())).unwrap());
+        let color = bevy::color::Color::srgb(color.r, color.g, color.b);
+        let cell_shape = ShapeBuilder::with(&polygon)
+            .fill(color)
+            .stroke((BLACK, 2.0))
+            .build();
+        let polyline = bevy::math::primitives::Polyline2d::new(vertices);
+        let outline_mesh_id = meshes.add(polyline);
+        let mut cell = commands.spawn((
+            cell_shape,
+            Transform::from_xyz(
+                // Distribute shapes from -X_EXTENT/2 to +X_EXTENT/2.
+                v_cell.site_position().x as f32 * scale,
+                v_cell.site_position().y as f32 * scale,
+                0.0,
+            ),
+            Cell {
+                cell_id: CellId(v_cell.site()),
+                outline: outline_mesh_id.clone(),
+            },
+        ));
+        cell.observe(click_cell).observe(over_cell);
     }
     for player in game_state.players.values_mut() {
         let mut pos = random.0.sample(
@@ -296,8 +280,15 @@ fn startup(
         let cell_id = world_map.get_cell_for_position(pos);
         if let Some(cell_id) = cell_id {
             pos = world_map.voronoi.cell(cell_id.0).site_position().to_vec2() * scale;
-            let settlement_mesh = meshes.add(Rectangle::new(10.0, 10.0));
-            let unit_mesh = meshes.add(Circle::new(5.0));
+            let settlement_mesh = ShapeBuilder::with(&RegularPolygon{
+                sides:4,
+                center:Vec2::ZERO,
+                feature:bevy_prototype_lyon::shapes::RegularPolygonFeature::SideLength(10.0)
+            }).fill(player.color).stroke((BLACK,1.0)).build();
+            let unit_mesh = ShapeBuilder::with(&Circle{
+                radius:5.0,
+                center:Vec2::ZERO
+            }).fill(player.color).stroke((BLACK,1.0)).build();
             let name = player
                 .settlement_names
                 .pop()
@@ -312,7 +303,7 @@ fn startup(
                     cost: 2.0,
                     progress: 0.0,
                     template: UnitTemplate {
-                        mesh: Mesh2d(unit_mesh),
+                        mesh: unit_mesh,
                         unit: Unit {
                             speed: 150.0,
                             used_speed: 0.0,
@@ -344,8 +335,7 @@ fn startup(
                 .id();
             player.camera_entity = Some(camera_entity);
             let mut settlement = commands.spawn((
-                Mesh2d(settlement_mesh),
-                MeshMaterial2d(materials.add(player.color)),
+                settlement_mesh,
                 Transform::from_translation(pos.extend(3.0)),
                 settlment,
             ));
@@ -570,7 +560,7 @@ fn turn_start(
                         if unit_constuction.add_progress(production) {
                             let mut unit = commands.spawn((
                                 unit_constuction.template.clone(),
-                                MeshMaterial2d(materials.add(player.color)),
+                                //MeshMaterial2d(materials.add(player.color)),
                                 Transform::from_xyz(
                                     transform.translation.x,
                                     transform.translation.y,
@@ -604,7 +594,7 @@ struct GameState {
 impl GameState {
     fn new(player_count: usize) -> Self {
         let mut players = HashMap::with_capacity(player_count);
-        let civs= ["Luikha Empire","Ishabia Kingdom"];
+        let civs = ["Luikha Empire", "Ishabia Kingdom"];
         for i in 0..player_count {
             let t = (i as f32 / (player_count + 1) as f32);
             let color = Color::hsl(360.0 * t, 0.95, 0.7);
@@ -613,7 +603,9 @@ impl GameState {
                 id: PlayerId(i),
                 local: true,
                 settlement_names: vec![],
-                settlement_context:SettlementNameCtx { civilisation_name: civs[i].to_string() },
+                settlement_context: SettlementNameCtx {
+                    civilisation_name: civs[i].to_string(),
+                },
                 camera_entity: None,
                 color,
             };
@@ -868,7 +860,7 @@ impl Construction for UnitConstuction {
 #[derive(Bundle, Clone)]
 struct UnitTemplate {
     unit: Unit,
-    mesh: Mesh2d,
+    mesh: Shape,
 }
 #[derive(Clone)]
 enum ConstructionJob {
