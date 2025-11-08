@@ -39,6 +39,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Set up MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
       - name: Install rust toolchain
         uses: dtolnay/rust-toolchain@master
         with:
