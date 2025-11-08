@@ -5,7 +5,16 @@ use crate::{
     generate::{CellId, WorldMap},
     pathfinding::ToVec2,
 };
-use bevy::prelude::*;
+use bevy::{
+    camera::{Viewport, visibility::RenderLayers},
+    prelude::*,
+    render::render_resource::BlendState,
+    window::PrimaryWindow,
+};
+use bevy_egui::{
+    EguiContext, EguiContexts, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass,
+    PrimaryEguiContext, egui::{self, Ui},
+};
 use bevy_pancam::{PanCam, PanCamPlugin};
 use clap::Parser;
 use colorgrad::Gradient;
@@ -13,10 +22,10 @@ use glam::Vec2;
 use num::Num;
 use rand::{Rng, SeedableRng, distr::Uniform};
 use rand_chacha::ChaCha20Rng;
-
 mod generate;
 mod helpers;
 mod pathfinding;
+
 #[derive(Parser, Debug)]
 struct Args {
     #[arg(long, default_value_t = 16.0)]
@@ -59,16 +68,17 @@ fn main() -> anyhow::Result<()> {
     println!("Seed: {}", seed);
     App::new()
         .add_plugins((
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    present_mode: bevy::window::PresentMode::Mailbox,
-                    ..default()
-                }),
-                ..default()
-            }),
+            DefaultPlugins, /*.set(WindowPlugin {
+                                primary_window: Some(Window {
+                                    present_mode: bevy::window::PresentMode::Mailbox,
+                                    ..default()
+                                }),
+                                ..default()
+                            })*/
             PanCamPlugin,
             MeshPickingPlugin,
         ))
+        .add_plugins(EguiPlugin::default())
         .add_message::<TurnStart>()
         .insert_resource(GameState::new(2))
         .insert_resource(Random(rng))
@@ -80,6 +90,7 @@ fn main() -> anyhow::Result<()> {
             (
                 move_unit,
                 turn_start,
+                deselect,
                 temp,
                 construct_unit,
                 reset_turn_ready_to_end,
@@ -87,6 +98,7 @@ fn main() -> anyhow::Result<()> {
         )
         .add_systems(FixedUpdate, set_unit_next_cell)
         .add_systems(FixedPostUpdate, check_if_turn_ready_to_end)
+        .add_systems(EguiPrimaryContextPass, ui_example_system)
         .run();
     Ok(())
 }
@@ -113,6 +125,15 @@ fn temp(
     }
 }
 
+fn deselect(mut commands: Commands, highlights: Query<Entity, With<CellHighlight>>,keyboard: Res<ButtonInput<KeyCode>>,mut selected: ResMut<Selection>){
+    if keyboard.just_pressed(KeyCode::Escape){
+        *selected = Selection::None;
+        for entity in highlights.iter(){
+            let mut highlight = commands.entity(entity);
+            highlight.despawn();
+        }
+    }
+}
 fn construct_unit(
     mut settlements: Query<&mut SettlementCenter>,
     keyboard: Res<ButtonInput<KeyCode>>,
@@ -137,7 +158,9 @@ fn startup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut random: ResMut<Random<ChaCha20Rng>>,
+    mut egui_global_settings: ResMut<EguiGlobalSettings>,
 ) {
+    egui_global_settings.auto_create_primary_context = false;
     let scale = world_map.scale;
 
     let g = colorgrad::GradientBuilder::new()
@@ -201,10 +224,12 @@ fn startup(
             let settlement_mesh = meshes.add(Rectangle::new(10.0, 10.0));
             let unit_mesh = meshes.add(Circle::new(5.0));
             let mut settlment = SettlementCenter {
+                name:format!("Settlement - {}",player.id.0),
                 controller: player.id,
                 production: 1.0,
                 construction: None,
                 available_constructions: vec![ConstructionJob::Unit(UnitConstuction {
+                    name:"Unit 1".to_string(),
                     cost: 2.0,
                     progress: 0.0,
                     template: UnitTemplate {
@@ -221,7 +246,24 @@ fn startup(
                     },
                 })],
             };
-            player.camera_pos = Some(pos.extend(0.0));
+
+            let camera_entity = commands
+                .spawn((
+                    Camera2d,
+                    Transform::from_translation(pos.extend(0.0)),
+                    //Transform::from_xyz(8.0 * scale, 4.5 * scale, 0.0),
+                    Camera {
+                        is_active: player.order == 0,
+                        ..default()
+                    },
+                    PanCam {
+                        enabled: player.order == 0,
+                        //max_scale: 1.0,
+                        ..default()
+                    },
+                ))
+                .id();
+            player.camera_entity = Some(camera_entity);
             let mut settlement = commands.spawn((
                 Mesh2d(settlement_mesh),
                 MeshMaterial2d(materials.add(player.color)),
@@ -233,25 +275,143 @@ fn startup(
             info!("Couldn't find cell at {}", pos);
         }
     }
-    let camera_pos = game_state
-        .players
-        .iter()
-        .find(|p| p.1.order == 0)
-        .unwrap()
-        .1
-        .camera_pos
-        .unwrap();
+
+    // Egui camera.
     commands.spawn((
+        // The `PrimaryEguiContext` component requires everything needed to render a primary context.
+        PrimaryEguiContext,
         Camera2d,
-        Transform::from_translation(camera_pos),
-        //Transform::from_xyz(8.0 * scale, 4.5 * scale, 0.0),
-        PanCam {
-            //max_scale: 1.0,
+        // Setting RenderLayers to none makes sure we won't render anything apart from the UI.
+        RenderLayers::none(),
+        Camera {
+            order: 1,
+            output_mode: bevy::camera::CameraOutputMode::Write {
+                blend_state: Some(BlendState::ALPHA_BLENDING),
+                clear_color: ClearColorConfig::None,
+            },
+            clear_color: ClearColorConfig::Custom(Color::NONE),
             ..default()
         },
     ));
 }
+// This function runs every frame. Therefore, updating the viewport after drawing the gui.
+// With a resource which stores the dimensions of the panels, the update of the Viewport can
+// be done in another system.
+fn ui_example_system(
+    mut contexts: EguiContexts,
+    mut camera: Query<&mut Camera, Without<EguiContext>>,
+    window: Single<&mut Window, With<PrimaryWindow>>,
+    game_state: Res<GameState>,
+    selected: Res<Selection>,
+    mut settlements: Query<&mut SettlementCenter>
+) -> Result {
+    let ctx = contexts.ctx_mut()?;
+    let player = game_state.players.get(&game_state.active_player).unwrap();
+    let mut left = egui::SidePanel::left("left_panel")
+        .resizable(true)
+        .show(ctx, |ui| {
+            ui.label("Left resizeable panel");
+            ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
+        })
+        .response
+        .rect
+        .width(); // height is ignored, as the panel has a hight of 100% of the screen
 
+    let mut right = egui::SidePanel::right("right_panel")
+        .resizable(true)
+        .show(ctx, |ui| {
+            ui.label("Right resizeable panel");
+            match *selected {
+                Selection::None => {},
+                Selection::Unit(entity) => {},
+                Selection::Settlement(entity) => {
+                    let settlement = settlements.get_mut(entity).unwrap();
+                    ui.label(settlement.name.clone());
+                    if let Some(ref job) = settlement.construction{
+                        job.progress_label(ui);
+                    }else{
+                        ui.label("No Construction Queued");
+                    }
+                    for job in settlement.available_constructions.iter(){
+                        job.available_label(ui);
+                    }
+                },
+            }
+            
+            ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
+        })
+        .response
+        .rect
+        .width(); // height is ignored, as the panel has a height of 100% of the screen
+
+    let mut top = egui::TopBottomPanel::top("top_panel")
+        .resizable(true)
+        .show(ctx, |ui| {
+            ui.label("Top resizeable panel");
+            ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
+        })
+        .response
+        .rect
+        .height(); // width is ignored, as the panel has a width of 100% of the screen
+    let mut bottom = egui::TopBottomPanel::bottom("bottom_panel")
+        .resizable(true)
+        .show(ctx, |ui| {
+            ui.label("Bottom resizeable panel");
+            ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
+        })
+        .response
+        .rect
+        .height(); // width is ignored, as the panel has a width of 100% of the screen
+
+    // Scale from logical units to physical units.
+    left *= window.scale_factor();
+    right *= window.scale_factor();
+    top *= window.scale_factor();
+    bottom *= window.scale_factor();
+
+    // -------------------------------------------------
+    // |  left   |            top   ^^^^^^   |  right  |
+    // |  panel  |           panel  height   |  panel  |
+    // |         |                  vvvvvv   |         |
+    // |         |---------------------------|         |
+    // |         |                           |         |
+    // |<-width->|          viewport         |<-width->|
+    // |         |                           |         |
+    // |         |---------------------------|         |
+    // |         |          bottom   ^^^^^^  |         |
+    // |         |          panel    height  |         |
+    // |         |                   vvvvvv  |         |
+    // -------------------------------------------------
+    //
+    // The upper left point of the viewport is the width of the left panel and the height of the
+    // top panel
+    //
+    // The width of the viewport the width of the top/bottom panel
+    // Alternative the width can be calculated as follow:
+    // size.x = window width - left panel width - right panel width
+    //
+    // The height of the viewport is:
+    // size.y = window height - top panel height - bottom panel height
+    //
+    // Therefore we use the alternative for the width, as we can callculate the Viewport as
+    // following:
+
+    let pos = UVec2::new(left as u32, top as u32);
+    let size = UVec2::new(window.physical_width(), window.physical_height())
+        - pos
+        - UVec2::new(right as u32, bottom as u32);
+
+    if let Some(camera_entity) = player.camera_entity {
+        let mut camera = camera.get_mut(camera_entity).unwrap();
+        camera.viewport = Some(Viewport {
+            physical_position: pos,
+            physical_size: size,
+            ..default()
+        });
+    }
+
+    Ok(())
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PlayerId(usize);
 #[derive(Message)]
@@ -259,14 +419,19 @@ struct TurnStart {
     player: PlayerId,
 }
 fn check_if_turn_ready_to_end(
-    turn_actions: Query<&TurnAction>,
     units: Query<&Unit>,
+    settlements: Query<&SettlementCenter>,
     mut game_state: ResMut<GameState>,
 ) {
-    if units
+    let player_units_used = units
         .iter()
         .filter(|u| u.controller == game_state.active_player)
-        .all(|u| u.goal.is_some() && u.next_cell.is_none())
+        .all(|u| (u.goal.is_some() && u.next_cell.is_none()) || u.used_speed > 0.0);
+    let player_settlements_busy = settlements
+    .iter()
+        .filter(|u| u.controller == game_state.active_player)
+        .all(|s|s.construction.is_some());
+    if player_units_used && player_settlements_busy
         && !game_state.turn_ready_to_end
     {
         game_state.turn_ready_to_end = true;
@@ -286,15 +451,34 @@ fn reset_turn_ready_to_end(
 }
 fn turn_start(
     mut commands: Commands,
+    mut cameras: Query<(&mut Camera, &mut PanCam, Entity), Without<EguiContext>>,
     mut turn_start: MessageReader<TurnStart>,
     mut units: Query<&mut Unit>,
     mut settlements: Query<(&mut SettlementCenter, &Transform)>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut selected: ResMut<Selection>,
+    highlights: Query<Entity, With<CellHighlight>>,
     game_state: Res<GameState>,
 ) {
     for turn in turn_start.read() {
-        info!("Turn started for player: {:?}", turn.player);
         let player = game_state.players.get(&turn.player).unwrap();
+        for (mut camera, mut pancam, entity) in cameras.iter_mut() {
+            if let Some(player_camera_entity) = player.camera_entity
+                && player_camera_entity == entity
+            {
+                camera.is_active = true;
+                pancam.enabled = true;
+            } else {
+                camera.is_active = false;
+                pancam.enabled = false;
+            }
+        }
+        info!("Turn started for player: {:?}", turn.player);
+        *selected = Selection::None;
+        for entity in highlights.iter(){
+            let mut highlight = commands.entity(entity);
+            highlight.despawn();
+        }
         for mut unit in units.iter_mut().filter(|u| u.controller == turn.player) {
             unit.used_speed = 0.0;
         }
@@ -330,7 +514,7 @@ struct Player {
     order: usize,
     color: Color,
     local: bool,
-    camera_pos: Option<Vec3>,
+    camera_entity: Option<Entity>,
 }
 #[derive(Resource)]
 struct GameState {
@@ -342,12 +526,15 @@ impl GameState {
     fn new(player_count: usize) -> Self {
         let mut players = HashMap::with_capacity(player_count);
         for i in 0..player_count {
-            let color = Color::hsl(360.0 * (i / (player_count + 1)) as f32, 0.95, 0.7);
+            let t = (i as f32 / (player_count + 1) as f32);
+            info!("TEMP: {}", t);
+            let color = Color::hsl(360.0 * t, 0.95, 0.7);
             let player = Player {
                 order: i,
                 id: PlayerId(i),
                 local: true,
-                camera_pos: None,
+
+                camera_entity: None,
                 color,
             };
             players.insert(player.id, player);
@@ -568,6 +755,7 @@ struct SettlementCenter {
     construction: Option<ConstructionJob>,
     production: f32,
     available_constructions: Vec<ConstructionJob>,
+    name: String,
 }
 trait Construction {
     fn add_progress(&mut self, progress: f32) -> bool;
@@ -580,6 +768,7 @@ struct UnitConstuction {
     cost: f32,
     progress: f32,
     template: UnitTemplate,
+    name:String
 }
 
 impl Construction for UnitConstuction {
@@ -604,4 +793,20 @@ struct UnitTemplate {
 #[derive(Clone)]
 enum ConstructionJob {
     Unit(UnitConstuction),
+}
+impl ConstructionJob{
+    pub fn progress_label(&self,mut ui:&mut Ui){
+        match self{
+            ConstructionJob::Unit(unit_constuction) => {
+                ui.label(format!("{}: {}/{}",unit_constuction.name,unit_constuction.progress,unit_constuction.cost));
+            },
+        }
+    }
+    pub fn available_label(&self, ui:&mut Ui){
+        match self{
+            ConstructionJob::Unit(unit_constuction) => {
+                ui.label(format!("{}: {}",unit_constuction.name,unit_constuction.cost));
+            },
+        }
+    }
 }
