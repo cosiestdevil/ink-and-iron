@@ -5242,6 +5242,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a257582fdcde896fd96463bf2d40eefea0580021c0712a0e2b028b60b47a837a"
 
 [[package]]
+name = "ink-and-iron"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bevy",
+ "bevy-tokio-tasks",
+ "bevy_easings",
+ "bevy_egui",
+ "bevy_kira_audio",
+ "bevy_pancam",
+ "bevy_prototype_lyon",
+ "clap 4.5.51",
+ "colorgrad",
+ "geo",
+ "glam 0.30.9",
+ "image 0.25.8",
+ "kalosm",
+ "lazy_static",
+ "noise",
+ "num",
+ "petgraph",
+ "rand 0.9.2",
+ "rand_chacha 0.9.0",
+ "serde",
+ "serde_json",
+ "simple_svg",
+ "smallvec",
+ "tokio",
+ "voronoice",
+]
+
+[[package]]
 name = "inotify"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9906,38 +9938,6 @@ dependencies = [
  "pin-project",
  "thiserror 2.0.17",
  "typed-builder",
-]
-
-[[package]]
-name = "vornoi-tests"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bevy",
- "bevy-tokio-tasks",
- "bevy_easings",
- "bevy_egui",
- "bevy_kira_audio",
- "bevy_pancam",
- "bevy_prototype_lyon",
- "clap 4.5.51",
- "colorgrad",
- "geo",
- "glam 0.30.9",
- "image 0.25.8",
- "kalosm",
- "lazy_static",
- "noise",
- "num",
- "petgraph",
- "rand 0.9.2",
- "rand_chacha 0.9.0",
- "serde",
- "serde_json",
- "simple_svg",
- "smallvec",
- "tokio",
- "voronoice",
 ]
 
 [[package]]
