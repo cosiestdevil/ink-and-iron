@@ -14,6 +14,7 @@ use bevy::{
     render::render_resource::BlendState,
     window::PrimaryWindow,
 };
+use bevy_easings::{Ease, EasingsPlugin};
 use bevy_egui::{
     EguiContext, EguiContexts, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass,
     PrimaryEguiContext,
@@ -99,6 +100,7 @@ fn main() -> anyhow::Result<()> {
             MeshPickingPlugin,
             ShapePlugin,
             AudioPlugin,
+            EasingsPlugin::default(),
         ))
         .add_plugins(bevy_tokio_tasks::TokioTasksPlugin::default())
         .add_plugins(EguiPlugin::default())
@@ -178,9 +180,21 @@ fn startup_screens(mut commands: Commands) {
             height: percent(100),
             align_items: AlignItems::Center,
             justify_content: JustifyContent::Center,
-            flex_direction:FlexDirection::Column,
+            flex_direction: FlexDirection::Column,
+            position_type: PositionType::Absolute,
+            top: Val::Percent(-100.0),
             ..default()
-        },
+        }
+        .ease_to_fn(
+            |prev| Node {
+                top: Val::Percent(0.0),
+                ..prev.clone()
+            },
+            bevy_easings::EaseFunction::BounceInOut,
+            bevy_easings::EasingType::Once {
+                duration: std::time::Duration::from_secs(2),
+            },
+        ).with_original_value(),
         children![
             (
                 Node { ..default() },
