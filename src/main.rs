@@ -108,7 +108,16 @@ fn main() -> anyhow::Result<()> {
         .insert_resource(Random(rng))
         .insert_resource(Selection::None)
         .insert_resource(a)
-        .add_systems(Startup, (generate_settlement_name, start_background_audio))
+        .add_systems(
+            Startup,
+            (
+                generate_settlement_name,
+                start_background_audio,
+                startup_screens,
+                setup_ui_camera,
+            ),
+        )
+        .add_systems(OnExit(AppState::Loading), remove_startup_screen)
         .add_systems(OnEnter(AppState::InGame), startup)
         .add_systems(
             Update,
@@ -157,6 +166,53 @@ fn temp(
                 game_state.active_player = next_player.id;
             }
         }
+    }
+}
+#[derive(Component)]
+struct StartupScreen;
+fn startup_screens(mut commands: Commands) {
+    commands.spawn((
+        StartupScreen,
+        Node {
+            width: percent(100),
+            height: percent(100),
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
+            flex_direction:FlexDirection::Column,
+            ..default()
+        },
+        children![
+            (
+                Node { ..default() },
+                children![(
+                    Text::new("Ink & Iron"),
+                    TextFont {
+                        font_size: 99.0,
+                        ..default()
+                    },
+                    TextColor(Color::srgb(0.9, 0.9, 0.9)),
+                    TextShadow::default(),
+                )],
+            ),
+            (
+                Node { ..default() },
+                children![(
+                    Text::new("Cosiest Devil"),
+                    TextFont {
+                        font_size: 33.0,
+                        ..default()
+                    },
+                    TextColor(Color::srgb(0.9, 0.9, 0.9)),
+                    TextShadow::default(),
+                )]
+            )
+        ],
+    ));
+}
+fn remove_startup_screen(mut commands: Commands, screens: Query<Entity, With<StartupScreen>>) {
+    for entity in screens.iter() {
+        let mut screen = commands.entity(entity);
+        screen.despawn();
     }
 }
 fn start_background_audio(asset_server: Res<AssetServer>, audio: Res<Audio>) {
@@ -235,6 +291,27 @@ fn generate_settlement_name(
 }
 #[derive(Resource)]
 struct Random<R: Rng>(R);
+
+fn setup_ui_camera(mut commands: Commands, mut egui_global_settings: ResMut<EguiGlobalSettings>) {
+    egui_global_settings.auto_create_primary_context = false;
+    commands.spawn((
+        // The `PrimaryEguiContext` component requires everything needed to render a primary context.
+        PrimaryEguiContext,
+        Camera2d,
+        // Setting RenderLayers to none makes sure we won't render anything apart from the UI.
+        RenderLayers::none(),
+        Camera {
+            order: 1,
+            output_mode: bevy::camera::CameraOutputMode::Write {
+                blend_state: Some(BlendState::ALPHA_BLENDING),
+                clear_color: ClearColorConfig::None,
+            },
+            clear_color: ClearColorConfig::Custom(Color::NONE),
+            ..default()
+        },
+    ));
+}
+
 fn startup(
     mut commands: Commands,
     world_map: Res<WorldMap>,
@@ -242,9 +319,7 @@ fn startup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut random: ResMut<Random<ChaCha20Rng>>,
-    mut egui_global_settings: ResMut<EguiGlobalSettings>,
 ) {
-    egui_global_settings.auto_create_primary_context = false;
     let scale = world_map.scale;
 
     let g = colorgrad::GradientBuilder::new()
@@ -371,22 +446,6 @@ fn startup(
     }
 
     // Egui camera.
-    commands.spawn((
-        // The `PrimaryEguiContext` component requires everything needed to render a primary context.
-        PrimaryEguiContext,
-        Camera2d,
-        // Setting RenderLayers to none makes sure we won't render anything apart from the UI.
-        RenderLayers::none(),
-        Camera {
-            order: 1,
-            output_mode: bevy::camera::CameraOutputMode::Write {
-                blend_state: Some(BlendState::ALPHA_BLENDING),
-                clear_color: ClearColorConfig::None,
-            },
-            clear_color: ClearColorConfig::Custom(Color::NONE),
-            ..default()
-        },
-    ));
 }
 // This function runs every frame. Therefore, updating the viewport after drawing the gui.
 // With a resource which stores the dimensions of the panels, the update of the Viewport can
