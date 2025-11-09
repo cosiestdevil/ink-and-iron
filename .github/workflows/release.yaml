@@ -1,82 +1,212 @@
-name: release-flow
+name: Build & Release (Windows)
 
 on:
   push:
+    branches:
+      - main              # alpha/beta pre-releases from pushes
+      - 'v*.*.*'          # release branches like vX.9.0 -> full releases on pushes
     tags:
-      - "v[0-9]+.[0-9]+.[0-9]+*"
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Version - in the form of v1.2.3"
-        required: true
-        type: string
-
-# ToDo: adapt names
-env:
-  # This variable is used to name release output files.
-  GAME_EXECUTABLE_NAME: ink-and-iron
+      - 'v*.*.*-beta'     # create a beta pre-release when this tag is pushed
+      - 'v*.*.*'          # create a full release when final tags like vX.9.0 are pushed
 
 permissions:
   contents: write
+  id-token: write
+
+env:
+  # Set this to your produced .exe name (exact filename in target\release)
+  EXE_NAME: ink-and-iron.exe
+  # Optional: artifact base name (zip prefix); defaults to exe name without .exe
+  ARTIFACT_BASENAME: "ink-and-iron"
 
 jobs:
-  get-version:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Get tag
-        id: tag
-        run: echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
-    outputs:
-      version: ${{ inputs.version || steps.tag.outputs.tag }}
-
-  build-windows:
+  build-release:
     runs-on: windows-latest
-    needs: get-version
-    env:
-      VERSION: ${{needs.get-version.outputs.version}}
-      BUILD_INSTALLER: ${{ false }}
-      CUDA_COMPUTE_CAP: "75"
+    defaults:
+      run:
+        shell: bash
+
     steps:
-      - name: Checkout repository
+      - name: Checkout (full history & tags)
         uses: actions/checkout@v4
-      - name: Set up MSVC Developer Command Prompt
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Compute version (inline)
+        id: version
+        run: |
+          set -euo pipefail
+
+          ref_type="${GITHUB_REF_TYPE:-branch}"   # branch|tag
+          ref_name="${GITHUB_REF_NAME:-main}"
+
+          last_final="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname \
+                        | grep -E '^[vV][0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || true)"
+          last_beta_base="$(git tag --list 'v[0-9]*.[0-9]*.0-beta' --sort=-v:refname | head -n1 || true)"
+
+          get_part() { echo "$1" | sed -E 's/^v//' | cut -d- -f1 | cut -d. -f"$2"; }
+          commits_since() {
+            base="$1"
+            if git rev-parse -q --verify "$base" >/dev/null; then
+              git rev-list --count "${base}..HEAD"
+            else
+              echo "0"
+            fi
+          }
+
+          if [ -n "${last_beta_base:-}" ]; then
+            X="$(get_part "$last_beta_base" 1)"
+          elif [ -n "${last_final:-}" ]; then
+            X="$(get_part "$last_final" 1)"
+          else
+            X="0"
+          fi
+
+          CHANNEL=""
+          PRERELEASE="true"
+          VERSION=""
+          RELEASE_TAG=""
+          RELEASE_NAME=""
+
+          if [[ "$ref_type" == "tag" && "$ref_name" =~ ^v[0-9]+\.[0-9]+\.0-beta$ ]]; then
+            VERSION="$ref_name"
+            CHANNEL="beta"
+            PRERELEASE="true"
+            RELEASE_TAG="$VERSION"
+            RELEASE_NAME="Beta $VERSION"
+
+          elif [[ "$ref_type" == "tag" && "$ref_name" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            VERSION="$ref_name"
+            CHANNEL="release"
+            PRERELEASE="false"
+            RELEASE_TAG="$VERSION"
+            RELEASE_NAME="Release $VERSION"
+
+          elif [[ "$ref_type" == "branch" && "$ref_name" == "main" ]]; then
+            if [ -n "${last_beta_base:-}" ]; then
+              MAJ="$(get_part "$last_beta_base" 1)"
+              MIN="$(get_part "$last_beta_base" 2)"
+              P="$(commits_since "$last_beta_base")"
+              VERSION="v${MAJ}.${MIN}.${P}-beta"
+              CHANNEL="beta"
+              PRERELEASE="true"
+              RELEASE_TAG="$VERSION"
+              RELEASE_NAME="Beta $VERSION"
+            else
+              BASE="${last_final:-HEAD~0}"
+              Y="$(commits_since "$BASE")"
+              VERSION="v${X}.0.${Y}-alpha"
+              CHANNEL="alpha"
+              PRERELEASE="true"
+              RELEASE_TAG="$VERSION"
+              RELEASE_NAME="Alpha $VERSION"
+            fi
+
+          elif [[ "$ref_type" == "branch" && "$ref_name" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            MAJ="$(echo "$ref_name" | sed -E 's/^v//' | cut -d. -f1)"
+            MIN="$(echo "$ref_name" | sed -E 's/^v//' | cut -d. -f2)"
+            stream_last="$(git tag --list "v${MAJ}.${MIN}.*" --sort=-v:refname | head -n1 || true)"
+            last_patch=0
+            if [ -n "${stream_last:-}" ]; then
+              last_patch="$(get_part "$stream_last" 3)"
+            fi
+            cnt="$(commits_since "${stream_last:-$ref_name}")"
+            new_patch=$(( last_patch + cnt ))
+            VERSION="v${MAJ}.${MIN}.${new_patch}"
+            CHANNEL="release"
+            PRERELEASE="false"
+            RELEASE_TAG="$VERSION"
+            RELEASE_NAME="Release $VERSION"
+
+          else
+            BASE="${last_final:-HEAD~0}"
+            Y="$(commits_since "$BASE")"
+            VERSION="v${X}.0.${Y}-alpha"
+            CHANNEL="alpha"
+            PRERELEASE="true"
+            RELEASE_TAG="$VERSION"
+            RELEASE_NAME="Alpha $VERSION"
+          fi
+
+          art="${ARTIFACT_BASENAME}"
+          if [ -z "$art" ]; then
+            base="$(echo "${EXE_NAME:-app.exe}" | sed -E 's/\.exe$//I')"
+            art="${base}-windows-x86_64"
+          fi
+
+          {
+            echo "version=$VERSION"
+            echo "prerelease=$PRERELEASE"
+            echo "tag=$RELEASE_TAG"
+            echo "name=$RELEASE_NAME"
+            echo "channel=$CHANNEL"
+            echo "artifact_basename=$art"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: MSVC environment
         uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install CUDA Toolkit
+        uses: Jimver/cuda-toolkit@v0.2.19
         with:
-          arch: x64
-      - name: Install rust toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
-      - uses: Jimver/cuda-toolkit@v0.2.29
-        id: cuda-toolkit
-        with:
-          cuda: "12.9.0"
-      - uses: actions/setup-python@v6
-        with: 
-          python-version: '3.13'
-      - name: Install Hugging Face CLI
+          cuda: '12.9'
+
+      - name: Python & Hugging Face CLI
+        shell: pwsh
         run: |
+          python -m pip install --upgrade pip
           pip install -U "huggingface_hub"
-      - name: Download LLM Models
+
+      - name: Download models
+        shell: pwsh
+        run: ./download_models.ps1
+
+      - name: Cargo build (release)
+        run: cargo build --release
+
+      - name: Collect build outputs
+        id: collect
+        shell: pwsh
         run: |
-          ./download_models.ps1
-      - name: Build release
-        run: |
-          cargo build --profile release
-      - name: Prepare release
-        run: |
-          mkdir target/release/assets && cp -r assets target/release/assets
-          mkdir target/release/credits && cp -r credits target/release/credits
-      - name: Zip release
-        uses: vimtor/action-zip@v1.1
-        with:
-          files: target/release/assets/ target/release/credits/ target/release/${{ env.GAME_EXECUTABLE_NAME }}.exe
-          dest: ${{ env.GAME_EXECUTABLE_NAME }}_windows.zip
-      - name: Upload release
+          $RelDir = "target\release"
+          if (-not (Test-Path $RelDir)) { throw "Release folder not found: $RelDir" }
+
+          if (-not $env:EXE_NAME) { throw "EXE_NAME env var not set" }
+          $ExePath = Join-Path $RelDir $env:EXE_NAME
+          if (-not (Test-Path $ExePath)) {
+            throw "Executable not found: $ExePath"
+          }
+
+          $stage = Join-Path $env:RUNNER_TEMP "stage"
+          if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+          New-Item -ItemType Directory -Path $stage | Out-Null
+
+          Copy-Item $ExePath -Destination $stage
+          if (Test-Path "assets")  { Copy-Item "assets"  -Destination (Join-Path $stage "assets")  -Recurse }
+          if (Test-Path "credits") { Copy-Item "credits" -Destination (Join-Path $stage "credits") -Recurse }
+
+          $artifactBase = "${{ steps.version.outputs.artifact_basename }}"
+          $zipName = "$artifactBase-${{ steps.version.outputs.version }}.zip"
+          $zipPath = Join-Path $env:RUNNER_TEMP $zipName
+
+          if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zipPath
+
+          "zip_path=$zipPath" >> $env:GITHUB_OUTPUT
+          "zip_name=$zipName" >> $env:GITHUB_OUTPUT
+      - name: Upload asset & create/update release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ${{ env.GAME_EXECUTABLE_NAME }}_windows.zip
-          asset_name: ${{ env.GAME_EXECUTABLE_NAME }}_${{ env.VERSION }}_windows.zip
-          tag: ${{ env.VERSION }}
+          file: ${{ steps.collect.outputs.zip_path }}
+          asset_name: ${{ steps.collect.outputs.zip_name }}
+          tag: ${{ steps.version.outputs.tag }}
+          release_name: ${{ steps.version.outputs.name }}
+          body: |
+            Automated build for ${{ steps.version.outputs.name }}.
+            Channel: ${{ steps.version.outputs.channel }}.
+          prerelease: ${{ steps.version.outputs.prerelease }}
           overwrite: true
