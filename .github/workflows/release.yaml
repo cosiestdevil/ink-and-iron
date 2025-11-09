@@ -150,7 +150,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install CUDA Toolkit
-        uses: Jimver/cuda-toolkit@v0.2.19
+        uses: Jimver/cuda-toolkit@v0.2.29
         with:
           cuda: '12.9.0'
 
