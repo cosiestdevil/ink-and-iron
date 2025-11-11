@@ -2,7 +2,7 @@ use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
     hash::Hash,
-    ops::Deref, usize,
+    ops::Deref
 };
 
 use bevy::prelude::*;

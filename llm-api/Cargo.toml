@@ -1,0 +1,9 @@
+[package]
+name = "llm-api"
+edition = "2024"
+publish = false
+
+[dependencies]
+anyhow = "*"
+serde = { version = "1.0.228", features = ["derive"] }
+tokio = { workspace = true}

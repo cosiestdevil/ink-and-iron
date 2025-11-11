@@ -1,0 +1,12 @@
+[package]
+name = "llm-provider-cpu"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "llm_provider"
+path = "./src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+llm-provider = {path = "../llm-provider"}

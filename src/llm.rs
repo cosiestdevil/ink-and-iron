@@ -1,68 +1,96 @@
-use bevy::{asset::Asset, log::info, reflect::TypePath};
-use kalosm_language::{prelude::{Parse, Schema}, *};
-use kalosm_llama::{prelude::{ChatModelExt, GenerationParameters}, *};
-use kalosm_model_types::FileSource;
-use serde::{Deserialize, Serialize};
-use tokio::sync::OnceCell;
+use std::ffi::{CString};
 
-static LLM: OnceCell<Llama> = OnceCell::const_new();
-async fn get_llm() -> &'static Llama {
-    LLM.get_or_init(|| async {
-        let llm = Llama::builder()
-            .with_source(
-                LlamaSource::new(FileSource::local(
-                    "assets/llm/llama/Llama-3.2-3B-Instruct-Q4_K_M.gguf".into(),
-                ))
-                .with_tokenizer(FileSource::Local("assets/llm/llama/tokenizer.json".into()))
-                .with_config(FileSource::local("assets/llm/llama/config.json".into()))
-                .with_group_query_attention(1),
-            )
-            .build()
-            .await
-            .unwrap();
-        info!("LLM Loaded");
-        llm
-    }).await
-}
-
+use bevy::log::info;
+use libloading::Library;
+pub use llm_api::SettlementNameCtx;
+use llm_api::{ByteStr, ExternSettlementNameCtx, LLMOps, OwnedCtx, StatusCode};
+use tokio::sync::{
+    OnceCell,
+    oneshot::{self, Sender},
+};
 pub async fn settlement_names(ctx: SettlementNameCtx, temp: f32) -> anyhow::Result<Vec<String>> {
-    let params = GenerationParameters::default()
-        .with_max_length(48) // ~enough for 3 short lines
-        .with_temperature(temp)
-        .with_top_p(0.9)
-        .with_repetition_penalty(1.12);
-    let llm  = get_llm().await;
-    let prompt = r#"You output ONLY a single JSON object that conforms EXACTLY to the provided JSON Schema.
-Absolutely no extra text, no explanations, no examples, no code fences.
+    let ops = get_llm().await;
+    let (tx, rx) = oneshot::channel();
+    _settlement_names(ops, tx, ctx, temp);
+    let res = rx.await?;
+    Ok(res)
+}
 
-Content rules for each name:
-- 1-3 words.
-- In theme with the Civilisation Name
-- Only these characters: letters, numbers, spaces, . ! ? and (optionally) '.
-- Do not echo template tokens or placeholders (e.g., @handle, #Tag, %TOKEN%).
-- Must be UTF-8 compliant.
+fn _settlement_names(ops: &LLMOps, tx: Sender<Vec<String>>, ctx: SettlementNameCtx, temp: f32) {
+    let cstr = CString::new(ctx.civilisation_name.clone()).expect("no interior NULs");
+    let c_ptr = cstr.into_raw();
+    let owned = Box::new(OwnedCtx {
+        tx,
+        cstr_ptr: c_ptr,
+        ctx: ExternSettlementNameCtx {
+            civilisation_name: c_ptr,
+        },
+    });
+    let ctx_ptr: *const ExternSettlementNameCtx = &owned.ctx;
+    let user_data = Box::into_raw(owned);
+    extern "C" fn settlement_names_callback(
+        out_names: *const ByteStr,
+        out_names_len: usize,
+        user_data: *mut OwnedCtx,
+        _status: StatusCode,
+    ) {
+        let owned: Box<OwnedCtx> = unsafe { Box::from_raw(user_data) };
+        info!("Received settlement names");
+        let list = unsafe { core::slice::from_raw_parts(out_names, out_names_len) };
+        let mut names = Vec::new();
+        for bs in list {
+            let bytes = unsafe { core::slice::from_raw_parts(bs.ptr, bs.len) };
+            if let Ok(s) = core::str::from_utf8(bytes) {
+                // Own if needed:
+                let owned: String = s.to_owned();
+                names.push(owned);
+            } else {
+                // invalid utf-8; skip or record error
+            }
+        }
+        let _ = owned.tx.send(names);
+        if !owned.cstr_ptr.is_null() {
+            unsafe {
+                let _ = CString::from_raw(owned.cstr_ptr);
+            } // drops and frees
+        }
+    }
+    info!("Calling settlement names");
+    let a = ops.settlement_names;
+    info!("Calling settlement names");
+    (a)(ctx_ptr, temp, user_data, settlement_names_callback);
+    info!("Called settlement names");
+}
+static LLM: OnceCell<(LLMOps,Library)> = OnceCell::const_new();
+pub async fn get_llm() -> &'static LLMOps {
+    let a = LLM.get_or_init(async || load_llm().unwrap());
+    &a.await.0
+}
 
-If any name would violate the rules, replace it with a different name that complies.
-"#;
-    let task = llm.task(prompt).typed::<SettlementNamePack>();
-    let stream = task
-        .run(serde_json::ser::to_string(&ctx)?)
-        .with_sampler(params.clone());
-    let names = stream.await.unwrap();
-    info!("Names Generated: {:?}",names.settlement_names);
-    Ok(names.settlement_names.iter().map(|n| n.text.clone()).collect())
-}
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SettlementNameCtx {
-    pub civilisation_name: String,
-}
-#[derive(Parse, Schema, Clone, Debug, Serialize, Deserialize)]
-struct SettlementNamePack {
-    settlement_names: [SettlementName; 10],
-}
-#[derive(Parse, Schema, Clone, Debug, Serialize, Deserialize)]
-struct SettlementName {
-    // You can tighten this regex to your exact rules
-    #[parse(pattern = r"[A-Za-z0-9 '!?.]{2,40}")]
-    text: String,
+
+fn load_llm() -> anyhow::Result<(LLMOps,Library)> {
+    unsafe {
+        let mut lib = libloading::Library::new("llm_provider_cuda");
+        if let Err(err) = lib  {
+            info!("Cuda load failed, falling back to CPU LLM");
+            lib = libloading::Library::new("llm_provider");
+        }
+        let lib = lib?;
+        info!("Found Library");
+        let func: libloading::Symbol<llm_api::CreateFn> = lib.get(b"create_llm_provider")?;
+        info!("Found Create Function");
+        use core::mem::MaybeUninit;
+
+        // 1) Create uninitialized storage
+        let mut out = MaybeUninit::<LLMOps>::uninit();
+
+        let ok = func(out.as_mut_ptr());
+        if ok {
+            let ops = out.assume_init();
+            info!("Loaded Ops");
+            Ok((ops,lib))
+        } else {
+            panic!("AHH");
+        }
+    }
 }

@@ -67,6 +67,8 @@ enum AppState {
     Loading,
     InGame,
 }
+
+
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let mut rng = match args.seed {
@@ -148,6 +150,7 @@ fn main() -> anyhow::Result<()> {
         .run();
     Ok(())
 }
+
 fn temp(
     mut turn_start: MessageWriter<TurnStart>,
     keyboard: Res<ButtonInput<KeyCode>>,
@@ -194,7 +197,8 @@ fn startup_screens(mut commands: Commands) {
             bevy_easings::EasingType::Once {
                 duration: std::time::Duration::from_secs(2),
             },
-        ).with_original_value(),
+        )
+        .with_original_value(),
         children![
             (
                 Node { ..default() },
@@ -272,13 +276,14 @@ fn generate_settlement_name(
     mut rng: ResMut<Random<ChaCha20Rng>>,
     runtime: ResMut<TokioTasksRuntime>,
     game_state: Res<GameState>,
+    
 ) {
     let temp = rng.0.random_range(0.3..0.5);
     for player in game_state.players.values() {
-        let context = player.settlement_context.clone();
+        let civ_name = player.settlement_context.civilisation_name.clone();       
         let player_id = player.id;
         runtime.spawn_background_task(move |mut ctx| async move {
-            if let Ok(names) = llm::settlement_names(context.clone(), temp).await {
+            if let Ok(names) = llm::settlement_names(SettlementNameCtx { civilisation_name: civ_name }, temp).await {
                 ctx.run_on_main_thread(move |ctx| {
                     let world = ctx.world;
                     let (mut game_state, mut next_state) = {
@@ -331,7 +336,6 @@ fn startup(
     world_map: Res<WorldMap>,
     mut game_state: ResMut<GameState>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
     mut random: ResMut<Random<ChaCha20Rng>>,
 ) {
     let scale = world_map.scale;
@@ -407,7 +411,7 @@ fn startup(
                 .settlement_names
                 .pop()
                 .unwrap_or(format!("Settlement: {}", player.id.0));
-            let mut settlment = SettlementCenter {
+            let settlment = SettlementCenter {
                 name,
                 controller: player.id,
                 production: 1.0,
@@ -490,7 +494,7 @@ fn ui_example_system(
             ui.label("Right resizeable panel");
             match *selected {
                 Selection::None => {}
-                Selection::Unit(entity) => {}
+                Selection::Unit(_entity) => {}
                 Selection::Settlement(entity) => {
                     let settlement = settlements.get_mut(entity).unwrap();
                     ui.label(settlement.name.clone());
@@ -610,7 +614,7 @@ fn reset_turn_ready_to_end(
     mut turn_start: MessageReader<TurnStart>,
     mut game_state: ResMut<GameState>,
 ) {
-    for turn in turn_start.read() {
+    for _turn in turn_start.read() {
         game_state.turn_ready_to_end = false;
     }
 }
@@ -620,7 +624,6 @@ fn turn_start(
     mut turn_start: MessageReader<TurnStart>,
     mut units: Query<&mut Unit>,
     mut settlements: Query<(&mut SettlementCenter, &Transform)>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
     mut selected: ResMut<Selection>,
     highlights: Query<Entity, With<CellHighlight>>,
     game_state: Res<GameState>,
@@ -693,8 +696,8 @@ impl GameState {
     fn new(player_count: usize) -> Self {
         let mut players = HashMap::with_capacity(player_count);
         let civs = ["Luikha Empire", "Ishabia Kingdom"];
-        for i in 0..player_count {
-            let t = (i as f32 / (player_count + 1) as f32);
+        for (i,civ) in civs.iter().enumerate() {
+            let t = i as f32 / (player_count + 1) as f32;
             let color = Color::hsl(360.0 * t, 0.95, 0.7);
             let player = Player {
                 order: i,
@@ -702,7 +705,7 @@ impl GameState {
                 local: true,
                 settlement_names: vec![],
                 settlement_context: SettlementNameCtx {
-                    civilisation_name: civs[i].to_string(),
+                    civilisation_name: civ.to_string(),
                 },
                 camera_entity: None,
                 color,
@@ -843,7 +846,7 @@ fn click_cell(
                     info!("Set unit's goal");
                 }
             }
-            Selection::Settlement(entity) => {
+            Selection::Settlement(_entity) => {
                 *selected_unit = Selection::None;
             }
         }
@@ -863,7 +866,7 @@ fn over_cell(
     let (graph, nodes) =
         pathfinding::get_graph(world_map.voronoi.clone(), world_map.cell_height.clone());
     if let Selection::Unit(unit_entity) = *selected {
-        for (e, highlight) in highlights.iter() {
+        for (e, _highlight) in highlights.iter() {
             let mut e = commands.entity(e);
             e.despawn();
         }
@@ -965,7 +968,7 @@ enum ConstructionJob {
     Unit(UnitConstuction),
 }
 impl ConstructionJob {
-    pub fn progress_label(&self, mut ui: &mut Ui) {
+    pub fn progress_label(&self, ui: &mut Ui) {
         match self {
             ConstructionJob::Unit(unit_constuction) => {
                 ui.label(format!(
