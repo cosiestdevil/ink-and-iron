@@ -68,7 +68,6 @@ enum AppState {
     InGame,
 }
 
-
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let mut rng = match args.seed {
@@ -129,7 +128,6 @@ fn main() -> anyhow::Result<()> {
                 move_unit,
                 turn_start,
                 deselect,
-                temp,
                 construct_unit,
                 reset_turn_ready_to_end,
             )
@@ -151,28 +149,6 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn temp(
-    mut turn_start: MessageWriter<TurnStart>,
-    keyboard: Res<ButtonInput<KeyCode>>,
-    mut game_state: ResMut<GameState>,
-) {
-    if keyboard.just_pressed(KeyCode::Space) && game_state.turn_ready_to_end {
-        let current_player = game_state.active_player;
-        let current_player = game_state.players.get(&current_player);
-        if let Some(current_player) = current_player {
-            let next_player = game_state
-                .players
-                .values()
-                .find(|p| p.order == (current_player.order + 1) % game_state.players.len());
-            if let Some(next_player) = next_player {
-                turn_start.write(TurnStart {
-                    player: next_player.id,
-                });
-                game_state.active_player = next_player.id;
-            }
-        }
-    }
-}
 #[derive(Component)]
 struct StartupScreen;
 fn startup_screens(mut commands: Commands) {
@@ -276,14 +252,20 @@ fn generate_settlement_name(
     mut rng: ResMut<Random<ChaCha20Rng>>,
     runtime: ResMut<TokioTasksRuntime>,
     game_state: Res<GameState>,
-    
 ) {
     let temp = rng.0.random_range(0.3..0.5);
     for player in game_state.players.values() {
-        let civ_name = player.settlement_context.civilisation_name.clone();       
+        let civ_name = player.settlement_context.civilisation_name.clone();
         let player_id = player.id;
         runtime.spawn_background_task(move |mut ctx| async move {
-            if let Ok(names) = llm::settlement_names(SettlementNameCtx { civilisation_name: civ_name }, temp).await {
+            if let Ok(names) = llm::settlement_names(
+                SettlementNameCtx {
+                    civilisation_name: civ_name,
+                },
+                temp,
+            )
+            .await
+            {
                 ctx.run_on_main_thread(move |ctx| {
                     let world = ctx.world;
                     let (mut game_state, mut next_state) = {
@@ -472,26 +454,18 @@ fn ui_example_system(
     mut contexts: EguiContexts,
     mut camera: Query<&mut Camera, Without<EguiContext>>,
     window: Single<&mut Window, With<PrimaryWindow>>,
-    game_state: Res<GameState>,
+    mut game_state: ResMut<GameState>,
     selected: Res<Selection>,
     mut settlements: Query<&mut SettlementCenter>,
+    mut units: Query<&mut Unit>,
+    mut turn_start: MessageWriter<TurnStart>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
-    let player = game_state.players.get(&game_state.active_player).unwrap();
+
     let mut left = egui::SidePanel::left("left_panel")
         .resizable(true)
         .show(ctx, |ui| {
             ui.label("Left resizeable panel");
-            ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
-        })
-        .response
-        .rect
-        .width(); // height is ignored, as the panel has a hight of 100% of the screen
-
-    let mut right = egui::SidePanel::right("right_panel")
-        .resizable(true)
-        .show(ctx, |ui| {
-            ui.label("Right resizeable panel");
             match *selected {
                 Selection::None => {}
                 Selection::Unit(_entity) => {}
@@ -508,26 +482,72 @@ fn ui_example_system(
                     }
                 }
             }
-
             ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
         })
         .response
         .rect
-        .width(); // height is ignored, as the panel has a height of 100% of the screen
+        .width(); // height is ignored, as the panel has a hight of 100% of the screen
+    let right = 0;
+    // let mut right = egui::SidePanel::right("right_panel")
+    //     .resizable(true)
+    //     .show(ctx, |ui| {
+    //         ui.label("Right resizeable panel");
 
-    let mut top = egui::TopBottomPanel::top("top_panel")
-        .resizable(true)
-        .show(ctx, |ui| {
-            ui.label("Top resizeable panel");
-            ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
-        })
-        .response
-        .rect
-        .height(); // width is ignored, as the panel has a width of 100% of the screen
+    //         ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
+    //     })
+    //     .response
+    //     .rect
+    //     .width(); // height is ignored, as the panel has a height of 100% of the screen
+    let top = 0;
+    // let mut top = egui::TopBottomPanel::top("top_panel")
+    //     .resizable(true)
+    //     .show(ctx, |ui| {
+    //         ui.label("Top resizeable panel");
+    //         ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
+    //     })
+    //     .response
+    //     .rect
+    //     .height(); // width is ignored, as the panel has a width of 100% of the screen
     let mut bottom = egui::TopBottomPanel::bottom("bottom_panel")
         .resizable(true)
         .show(ctx, |ui| {
-            ui.label("Bottom resizeable panel");
+            ui.horizontal(|ui| {
+                match *selected {
+                    Selection::None => {}
+                    Selection::Unit(entity) => {
+                        let unit = units.get_mut(entity).unwrap();
+                        ui.label(format!("Unit"));
+                        ui.label(format!("Speed: {}/{}", unit.used_speed, unit.speed));
+                    }
+                    Selection::Settlement(_entity) => {}
+                }
+                ui.separator();
+                let avail = ui.available_size_before_wrap();
+                ui.allocate_ui_with_layout(
+                    avail,
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| {
+                        // These will appear stuck to the right edge:
+                        if ui.add_enabled(game_state.turn_ready_to_end, egui::widgets::Button::new("Next Turn")).clicked() {
+                            let current_player = game_state.active_player;
+                            let current_player = game_state.players.get(&current_player);
+                            if let Some(current_player) = current_player {
+                                let next_player = game_state.players.values().find(|p| {
+                                    p.order == (current_player.order + 1) % game_state.players.len()
+                                });
+                                if let Some(next_player) = next_player {
+                                    turn_start.write(TurnStart {
+                                        player: next_player.id,
+                                    });
+                                    game_state.active_player = next_player.id;
+                                }
+                            }
+                        }
+                        ui.separator();
+                        ui.label("v1.2.3");
+                    },
+                );
+            });
             ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
         })
         .response
@@ -536,8 +556,8 @@ fn ui_example_system(
 
     // Scale from logical units to physical units.
     left *= window.scale_factor();
-    right *= window.scale_factor();
-    top *= window.scale_factor();
+    //right *= window.scale_factor();
+    //top *= window.scale_factor();
     bottom *= window.scale_factor();
 
     // -------------------------------------------------
@@ -571,7 +591,8 @@ fn ui_example_system(
     let size = UVec2::new(window.physical_width(), window.physical_height())
         - pos
         - UVec2::new(right as u32, bottom as u32);
-
+    let active_player = game_state.active_player;
+    let player = game_state.players.get(&active_player).unwrap();
     if let Some(camera_entity) = player.camera_entity {
         let mut camera = camera.get_mut(camera_entity).unwrap();
         camera.viewport = Some(Viewport {
@@ -696,7 +717,7 @@ impl GameState {
     fn new(player_count: usize) -> Self {
         let mut players = HashMap::with_capacity(player_count);
         let civs = ["Luikha Empire", "Ishabia Kingdom"];
-        for (i,civ) in civs.iter().enumerate() {
+        for (i, civ) in civs.iter().enumerate() {
             let t = i as f32 / (player_count + 1) as f32;
             let color = Color::hsl(360.0 * t, 0.95, 0.7);
             let player = Player {
