@@ -61,7 +61,7 @@ jobs:
         run: ./download_models.ps1
 
       - name: Cargo build (release)
-        run: cargo build --release
+        run: cargo build --all --release
 
       - name: Collect build outputs
         id: collect
@@ -81,6 +81,10 @@ jobs:
           New-Item -ItemType Directory -Path $stage | Out-Null
 
           Copy-Item $ExePath -Destination $stage
+
+          # Copy any DLLs alongside the EXE
+          Get-ChildItem -Path $RelDir -Filter *.dll -File | Copy-Item -Destination $stage -Force
+          
           if (Test-Path "assets")  { Copy-Item "assets"  -Destination (Join-Path $stage "assets")  -Recurse }
           if (Test-Path "credits") { Copy-Item "credits" -Destination (Join-Path $stage "credits") -Recurse }
 
