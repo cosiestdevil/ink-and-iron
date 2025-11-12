@@ -18,7 +18,7 @@ use bevy_easings::{Ease, EasingsPlugin};
 use bevy_egui::{
     EguiContext, EguiContexts, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass,
     PrimaryEguiContext,
-    egui::{self, Ui},
+    egui::{self, Response, Ui},
 };
 use bevy_kira_audio::prelude::*;
 use bevy_pancam::{PanCam, PanCamPlugin};
@@ -128,7 +128,6 @@ fn main() -> anyhow::Result<()> {
                 move_unit,
                 turn_start,
                 deselect,
-                construct_unit,
                 reset_turn_ready_to_end,
             )
                 .run_if(in_state(AppState::InGame)),
@@ -230,21 +229,6 @@ fn deselect(
         for entity in highlights.iter() {
             let mut highlight = commands.entity(entity);
             highlight.despawn();
-        }
-    }
-}
-fn construct_unit(
-    mut settlements: Query<&mut SettlementCenter>,
-    keyboard: Res<ButtonInput<KeyCode>>,
-    game_state: Res<GameState>,
-    selected: Res<Selection>,
-) {
-    if let Selection::Settlement(entity) = *selected
-        && keyboard.just_pressed(KeyCode::Digit1)
-    {
-        let mut settlement = settlements.get_mut(entity).unwrap();
-        if settlement.controller == game_state.active_player {
-            settlement.construction = Some(settlement.available_constructions[0].clone());
         }
     }
 }
@@ -470,15 +454,17 @@ fn ui_example_system(
                 Selection::None => {}
                 Selection::Unit(_entity) => {}
                 Selection::Settlement(entity) => {
-                    let settlement = settlements.get_mut(entity).unwrap();
+                    let mut settlement = settlements.get_mut(entity).unwrap();
                     ui.label(settlement.name.clone());
                     if let Some(ref job) = settlement.construction {
                         job.progress_label(ui);
                     } else {
                         ui.label("No Construction Queued");
                     }
-                    for job in settlement.available_constructions.iter() {
-                        job.available_label(ui);
+                    for job in settlement.available_constructions.clone().iter() {
+                        if job.available_button(ui, true).clicked() {
+                            settlement.construction = Some(job.clone());
+                        }
                     }
                 }
             }
@@ -528,7 +514,13 @@ fn ui_example_system(
                     egui::Layout::right_to_left(egui::Align::Center),
                     |ui| {
                         // These will appear stuck to the right edge:
-                        if ui.add_enabled(game_state.turn_ready_to_end, egui::widgets::Button::new("Next Turn")).clicked() {
+                        if ui
+                            .add_enabled(
+                                game_state.turn_ready_to_end,
+                                egui::widgets::Button::new("Next Turn"),
+                            )
+                            .clicked()
+                        {
                             let current_player = game_state.active_player;
                             let current_player = game_state.players.get(&current_player);
                             if let Some(current_player) = current_player {
@@ -1007,6 +999,17 @@ impl ConstructionJob {
                     unit_constuction.name, unit_constuction.cost
                 ));
             }
+        }
+    }
+    pub fn available_button(&self, ui: &mut Ui, enabled: bool) -> Response {
+        match self {
+            ConstructionJob::Unit(unit_constuction) => ui.add_enabled(
+                enabled,
+                egui::widgets::Button::new(format!(
+                    "{}: {}",
+                    unit_constuction.name, unit_constuction.cost
+                )),
+            ),
         }
     }
 }
