@@ -71,7 +71,7 @@ features = [
     "hdr",
     #"ktx2",
     "multi_threaded",
-    #"png",
+    "png",
     "reflect_auto_register",
     #"smaa_luts",
     #"sysinfo_plugin",

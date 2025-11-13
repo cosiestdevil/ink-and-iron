@@ -124,12 +124,7 @@ fn main() -> anyhow::Result<()> {
         .add_systems(OnEnter(AppState::InGame), startup)
         .add_systems(
             Update,
-            (
-                move_unit,
-                turn_start,
-                deselect,
-                reset_turn_ready_to_end,
-            )
+            (move_unit, turn_start, deselect, reset_turn_ready_to_end)
                 .run_if(in_state(AppState::InGame)),
         )
         .add_systems(
@@ -303,9 +298,19 @@ fn startup(
     mut game_state: ResMut<GameState>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut random: ResMut<Random<ChaCha20Rng>>,
+    asset_server: Res<AssetServer>,
 ) {
     let scale = world_map.scale;
+    let parchment_handle: Handle<Image> = asset_server.load("textures/background.png");
 
+    commands.spawn((
+        Transform::from_xyz(8.0*scale, 4.5*scale, -1.0), // behind everything
+        Sprite {
+            image: parchment_handle,
+            custom_size: Some(Vec2::new(28.0*scale, 21.0*scale)), // something big
+            ..Default::default()
+        },
+    ));
     let g = colorgrad::GradientBuilder::new()
         .css("#001a33 0%, #003a6b 18%, #0f7a8a 32%, #bfe9e9 42%, #f2e6c8 48%, #e8d7a1 52%, #a7c88a 62%, #5b7f3a 72%, #8c8f93 85%, #cdd2d8 93%, #ffffff 100%   ")
         .build::<colorgrad::LinearGradient>().unwrap();
@@ -329,7 +334,7 @@ fn startup(
             closed: true,
         };
         let color = g.at(*world_map.cell_height.get(&CellId(v_cell.site())).unwrap());
-        let color = bevy::color::Color::srgb(color.r, color.g, color.b);
+        let color = bevy::color::Color::srgba(color.r, color.g, color.b,0.6);
         let cell_shape = ShapeBuilder::with(&polygon)
             .fill(color)
             .stroke((BLACK, 2.0))
