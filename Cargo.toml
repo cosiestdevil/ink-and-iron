@@ -29,6 +29,10 @@ bevy_kira_audio = { version = "0.24.0", features = ["wav"] }
 bevy_easings = "0.17.1"
 llm-api = { path = "./llm-api" }
 libloading = "0.8.9"
+#bevy_top_down_camera = {version="0.2.0",path = "../bevy_top_down_camera"}
+bevy_panorbit_camera = { version = "0.33.0", features = ["bevy_egui"] }
+tracing-appender = "0.2.3"
+#bevy_panorbit_camera = { version = "0.33.0" }
 [dependencies.bevy]
 version = "0.17.2"
 default-features = false
@@ -41,13 +45,13 @@ features = [
     "bevy_core_pipeline",
     "bevy_post_process",
     "bevy_anti_alias",
-    #"bevy_gilrs",
+    "bevy_gilrs",
     #"bevy_gizmos",
     #"bevy_gltf",
     "bevy_input_focus",
     "bevy_log",
     "bevy_mesh_picking_backend",
-    #"bevy_pbr",
+    "bevy_pbr",
     "bevy_picking",
     "bevy_render",
     #"bevy_scene",
@@ -75,7 +79,7 @@ features = [
     "reflect_auto_register",
     #"smaa_luts",
     #"sysinfo_plugin",
-    #"tonemapping_luts",
+    "tonemapping_luts",
     #"webgl2",
     "x11",
     "wayland",

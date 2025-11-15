@@ -91,7 +91,7 @@ impl From<&crate::Args> for WorldGenerationParams {
             continent_size: value.continent_size,
             ocean_count: value.ocean_count,
             ocean_size: value.ocean_size,
-            scale:500.0,
+            scale:30.0,
         }
     }
 }
