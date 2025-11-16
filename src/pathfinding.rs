@@ -1,37 +1,34 @@
 use crate::generate::CellId;
+use crate::generate::WorldMap;
 use glam::Vec2;
+use glam::Vec3Swizzles;
 use petgraph::Graph;
 use petgraph::prelude::*;
 use std::collections::HashMap;
-use voronoice::Voronoi;
 
 pub fn get_graph(
-    voronoi: Voronoi,
-    heights: HashMap<CellId, f32>,
+    world_map:&WorldMap,
 ) -> (Graph<CellId, f32>, HashMap<CellId, NodeIndex>) {
     let mut graph = Graph::<CellId, f32>::new();
     let mut nodes = HashMap::new();
-    for cell in voronoi.iter_cells() {
+    for cell in world_map.iter_cells() {
         let cell_id = CellId(cell.site());
         let node = graph.add_node(cell_id);
         nodes.insert(cell_id, node);
     }
     for (cell_id, node) in nodes.iter() {
-        let cell = voronoi.cell(cell_id.0);
-        let c_height = heights.get(cell_id).unwrap();
-        let c_pos = cell.site_position().to_vec2();
-        for n_cell_id in cell.iter_neighbors() {
-            let n_cell = voronoi.cell(n_cell_id);
-            let n_height = heights.get(&CellId(n_cell_id)).unwrap();
-            let n_pos = n_cell.site_position().to_vec2();
+        let c_pos = world_map.get_position_for_cell(*cell_id);
+        for n_cell_id in world_map.get_neighbours(*cell_id) {
+            
+            let n_pos = world_map.get_position_for_cell(n_cell_id);
             let length = c_pos.distance(n_pos);
-            let height = (c_height - n_height).abs();
+            let height = (c_pos.y - n_pos.y).abs();
             let slope = height / length;
             if slope < 0.3 {
                 graph.add_edge(
                     *node,
-                    *nodes.get(&CellId(n_cell_id)).unwrap(),
-                    c_pos.extend(*c_height).distance(n_pos.extend(*n_height)),
+                    *nodes.get(&n_cell_id).unwrap(),
+                    c_pos.distance(n_pos),
                 );
             }
         }
@@ -65,14 +62,14 @@ pub fn a_star(
     goal: CellId,
     graph: Graph<CellId, f32>,
     nodes: HashMap<CellId, NodeIndex>,
-    voronoi: Voronoi,
+    world_map:&WorldMap,
 ) -> Option<Vec<CellId>> {
     let mut open_list = vec![AStarNode::new(
         start,
         0.0,
         heuristic(
-            voronoi.cell(start.0).site_position().to_vec2(),
-            voronoi.cell(goal.0).site_position().to_vec2(),
+            world_map.get_position_for_cell(start).xz(),
+            world_map.get_position_for_cell(goal).xz(),
         ),
         None,
     )];
@@ -88,30 +85,30 @@ pub fn a_star(
         }
         open_list.retain(|n| n.cell_id != current.cell_id);
         closed_list.push(current.clone());
-        let v_cell = voronoi.cell(current.cell_id.0);
-        for n_cell_id in v_cell.iter_neighbors() {
-            if closed_list.iter().any(|n| n.cell_id.0 == n_cell_id) {
+        //let v_cell = voronoi.cell(current.cell_id.0);
+        for n_cell_id in world_map.get_neighbours(current.cell_id) {
+            if closed_list.iter().any(|n| n.cell_id == n_cell_id) {
                 continue;
             }
             let edges = graph
                 .edges_connecting(
                     *nodes.get(&current.cell_id).unwrap(),
-                    *nodes.get(&CellId(n_cell_id)).unwrap(),
+                    *nodes.get(&n_cell_id).unwrap(),
                 )
                 .collect::<Vec<_>>();
             if let Some(distance) = edges.first() {
                 let tent_g = current.g + distance.weight();
-                if let Some(neighbor) = open_list.iter().find(|n| n.cell_id == CellId(n_cell_id)) {
+                if let Some(neighbor) = open_list.iter().find(|n| n.cell_id == n_cell_id) {
                     if tent_g >= neighbor.g {
                         continue;
                     }
                 } else {
                     open_list.push(AStarNode::new(
-                        CellId(n_cell_id),
+                        n_cell_id,
                         tent_g,
                         heuristic(
-                            voronoi.cell(n_cell_id).site_position().to_vec2(),
-                            voronoi.cell(goal.0).site_position().to_vec2(),
+                            world_map.get_position_for_cell(n_cell_id).xz(),
+                            world_map.get_position_for_cell(goal).xz(),
                         ),
                         Some(Box::new(current.clone())),
                     ));

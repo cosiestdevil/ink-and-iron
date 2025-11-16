@@ -316,16 +316,6 @@ fn setup_ui_camera(mut commands: Commands, mut egui_global_settings: ResMut<Egui
         },
     ));
 }
-fn min_max_componentwise<I>(mut iter: I) -> Option<(Vec2, Vec2)>
-where
-    I: Iterator<Item = Vec2>,
-{
-    let first = iter.next()?; // early-return None if empty
-
-    let (min, max) = iter.fold((first, first), |(min, max), v| (min.min(v), max.max(v)));
-
-    Some((min, max))
-}
 
 fn smooth01(t: f32) -> f32 {
     // standard smoothstep from 0..1
@@ -401,13 +391,7 @@ fn startup(
     let g = colorgrad::GradientBuilder::new()
         .css("#001a33 0%, #003a6b 18%, #0f7a8a 32%, #bfe9e9 42%, #f2e6c8 48%, #e8d7a1 52%, #a7c88a 62%, #5b7f3a 72%, #8c8f93 85%, #cdd2d8 93%, #ffffff 100%   ")
         .build::<colorgrad::LinearGradient>().unwrap();
-    let map_box = min_max_componentwise(
-        world_map
-            .voronoi
-            .iter_cells()
-            .map(|c| c.site_position().to_vec2() * scale),
-    )
-    .unwrap();
+    let map_box = world_map.bounds();
     let mut height_material_cache = HashMap::<u8, Handle<StandardMaterial>>::new();
     let outline_material = materials.add(StandardMaterial {
         base_color: Color::BLACK,
@@ -425,7 +409,7 @@ fn startup(
         unlit: false,
         ..default()
     });
-    for v_cell in world_map.voronoi.iter_cells() {
+    for v_cell in world_map.iter_cells() {
         if v_cell.is_on_hull() {
             continue;
         }
@@ -448,7 +432,8 @@ fn startup(
         //     .map(|(v, uv)| (v.extend(0.0).xzy(), *uv))
         //     .collect();
         //vertices3.reverse();
-        let height = *(world_map.cell_height.get(&CellId(v_cell.site())).unwrap());
+        let height = world_map.get_raw_height(&CellId(v_cell.site()));
+        
         let height_key = (height * 100.0).round() as u8;
         assert!((0.0..=1.0).contains(&height));
         let material = if let Some(mat) = height_material_cache.get(&height_key) {
@@ -532,12 +517,12 @@ fn startup(
         Transform::from_xyz(0.0, 200.0, -200.0).looking_at(vec3(0.0, 0.0, 0.0), Vec3::Y),
     ));
     for player in game_state.players.values_mut() {
-        let mut pos = random
+        let pos = random
             .0
             .sample(Uniform::<Vec2>::new(map_box.0, map_box.1).unwrap());
         let cell_id = world_map.get_cell_for_position(pos);
         if let Some(cell_id) = cell_id {
-            pos = world_map.voronoi.cell(cell_id.0).site_position().to_vec2() * scale;
+            let pos = world_map.get_position_for_cell(cell_id);
             let player_mat = materials.add(player.color);
             let settlement_mesh = meshes.add(Cuboid::from_length(world_map.entity_scale));
             let unit_mesh = meshes.add(Cylinder::new(
@@ -573,8 +558,6 @@ fn startup(
                     },
                 })],
             };
-            let height = *(world_map.cell_height.get(&cell_id).unwrap()) * (world_map.height_scale);
-            let pos = pos.extend(height + world_map.entity_scale).xzy();
             let camera_entity = commands
                 .spawn((
                     Camera3d { ..default() },
@@ -937,10 +920,7 @@ impl GameState {
         }
     }
 }
-fn set_unit_next_cell(
-    mut units: Query<&mut Unit>,
-    world_map: Res<WorldMap>,
-) {
+fn set_unit_next_cell(mut units: Query<&mut Unit>, world_map: Res<WorldMap>) {
     for mut unit in units.iter_mut() {
         if let Some(goal) = unit.goal {
             if unit.current_cell == goal {
@@ -950,17 +930,8 @@ fn set_unit_next_cell(
                 continue;
             }
             if unit.next_cell.is_none() {
-                let (graph, nodes) = pathfinding::get_graph(
-                    world_map.voronoi.clone(),
-                    world_map.cell_height.clone(),
-                );
-                let result = pathfinding::a_star(
-                    unit.current_cell,
-                    goal,
-                    graph,
-                    nodes,
-                    world_map.voronoi.clone(),
-                );
+                let (graph, nodes) = pathfinding::get_graph(&world_map);
+                let result = pathfinding::a_star(unit.current_cell, goal, graph, nodes, &world_map);
                 match result {
                     Some(mut result) => {
                         let _ = result.pop();
@@ -1035,14 +1006,8 @@ fn click_cell(
     cells: Query<&Cell>,
     mut units: Query<&mut Unit>,
     mut selected_unit: ResMut<Selection>,
-    world_map: Res<WorldMap>,
 ) {
     if event.button == PointerButton::Primary {
-        if let Ok(cell) = cells.get(event.entity) {
-            let height = world_map.cell_height.get(&cell.cell_id).unwrap();
-
-            info!("Height: {height}");
-        }
         match *selected_unit {
             Selection::None => {}
             Selection::Unit(unit) => {
@@ -1069,8 +1034,7 @@ fn over_cell(
     mut commands: Commands,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let (graph, nodes) =
-        pathfinding::get_graph(world_map.voronoi.clone(), world_map.cell_height.clone());
+    let (graph, nodes) = pathfinding::get_graph(&world_map);
     if let Selection::Unit(unit_entity) = *selected {
         for (e, _highlight) in highlights.iter() {
             let mut e = commands.entity(e);
@@ -1079,7 +1043,7 @@ fn over_cell(
         let unit = units.get(unit_entity).unwrap();
         let start = unit.current_cell;
         let goal = cells.get(event.entity).unwrap().0.cell_id;
-        let result = pathfinding::a_star(start, goal, graph, nodes, world_map.voronoi.clone());
+        let result = pathfinding::a_star(start, goal, graph, nodes, &world_map);
         if let Some(result) = result {
             for cell_id in result {
                 let cell = cells.iter().find(|e| e.0.cell_id == cell_id);
@@ -1119,7 +1083,7 @@ enum Selection {
 
 #[derive(Component, Clone)]
 struct Unit {
-    name:String,
+    name: String,
     controller: PlayerId,
     speed: f32,
     used_speed: f32,
@@ -1181,7 +1145,9 @@ impl ConstructionJob {
             ConstructionJob::Unit(unit_constuction) => {
                 ui.label(format!(
                     "{}: {}/{}",
-                    unit_constuction.name, unit_constuction.progress(), unit_constuction.cost()
+                    unit_constuction.name,
+                    unit_constuction.progress(),
+                    unit_constuction.cost()
                 ));
             }
         }
@@ -1263,7 +1229,7 @@ pub fn build_extruded_with_caps(
     // -----------------
     // 2) TOP CAP VERTICES (y = height, normal +Y)
     // -----------------
-for p in path.iter().take(n){
+    for p in path.iter().take(n) {
         positions.push([p.x, height, p.y]);
         normals.push([0.0, 1.0, 0.0]);
         // simple planar UV (you can rescale/center as needed)
@@ -1276,7 +1242,7 @@ for p in path.iter().take(n){
     // -----------------
     // 3) BOTTOM CAP VERTICES (y = 0, normal -Y)
     // -----------------
-    for p in path.iter().take(n){
+    for p in path.iter().take(n) {
         positions.push([p.x, 0.0, p.y]);
         normals.push([0.0, -1.0, 0.0]);
         uvs.push([0.0, 0.0]);

@@ -2,7 +2,7 @@ use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
     hash::Hash,
-    ops::Deref
+    ops::Deref,
 };
 
 use bevy::prelude::*;
@@ -15,7 +15,7 @@ use rand::{
 };
 use voronoice::*;
 
-use crate::pathfinding::ToVec2;
+use crate::{helpers::min_max_componentwise, pathfinding::ToVec2};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CellId(pub usize);
@@ -26,29 +26,48 @@ pub struct ContinentId(usize);
 #[derive(Resource)]
 pub struct WorldMap {
     pub scale: f32,
-    pub height_scale:f32,
-    pub entity_scale:f32,
-    pub voronoi: Voronoi,
-    pub cell_height: HashMap<CellId, f32>,
+    pub height_scale: f32,
+    pub entity_scale: f32,
+    voronoi: Voronoi,
+    cell_height: HashMap<CellId, f32>,
     polygons: HashMap<CellId, geo::Polygon>,
 }
 impl WorldMap {
     pub fn get_cell_for_position(&self, pos: Vec2) -> Option<CellId> {
         for (cell_id, poly) in self.polygons.iter() {
-            if poly.contains(&geo::point!(x:(pos.x/self.scale) as f64,y:(pos.y/self.scale) as f64)) {
+            if poly.contains(&geo::point!(x:(pos.x/self.scale) as f64,y:(pos.y/self.scale) as f64))
+            {
                 return Some(*cell_id);
             }
         }
         None
     }
-    pub fn get_position_for_cell(&self, id:CellId)->Vec3{
+    pub fn get_position_for_cell(&self, id: CellId) -> Vec3 {
         let cell = self.voronoi.cell(id.0);
         let xz = cell.site_position().to_vec2() * self.scale;
         let height = self.cell_height.get(&id).unwrap() * (self.height_scale);
         xz.extend(height).xzy()
     }
-    pub fn get_neighbours(&self,id:CellId)->Vec<CellId>{
-        self.voronoi.cell(id.0).iter_neighbors().map(CellId).collect()
+    pub fn get_neighbours(&self, id: CellId) -> Vec<CellId> {
+        self.voronoi
+            .cell(id.0)
+            .iter_neighbors()
+            .map(CellId)
+            .collect()
+    }
+    pub fn bounds(&self) -> (Vec2, Vec2) {
+        min_max_componentwise(
+            self.voronoi
+                .iter_cells()
+                .map(|c| c.site_position().to_vec2() * self.scale),
+        )
+        .unwrap()
+    }
+    pub fn iter_cells(&self)->impl Iterator<Item = VoronoiCell<'_>>{
+        self.voronoi.iter_cells()
+    }
+    pub fn get_raw_height(&self, id:&CellId)->f32{
+        *(self.cell_height.get(id).unwrap())
     }
 }
 impl Deref for CellId {
@@ -85,7 +104,7 @@ pub struct WorldGenerationParams {
     continent_size: usize,
     ocean_count: usize,
     ocean_size: usize,
-    scale:f32
+    scale: f32,
 }
 impl From<&crate::Args> for WorldGenerationParams {
     fn from(value: &crate::Args) -> Self {
@@ -98,7 +117,7 @@ impl From<&crate::Args> for WorldGenerationParams {
             continent_size: value.continent_size,
             ocean_count: value.ocean_count,
             ocean_size: value.ocean_size,
-            scale:30.0,
+            scale: 30.0,
         }
     }
 }
@@ -116,7 +135,7 @@ pub fn generate_world<R: Rng + Clone>(
         continent_size,
         ocean_count,
         ocean_size,
-        scale
+        scale,
     } = params;
     let fbm = Fbm::<Perlin>::new(rng.next_u32());
     let ridged_multi = RidgedMulti::<Perlin>::new(rng.next_u32());
@@ -242,7 +261,7 @@ pub fn generate_world<R: Rng + Clone>(
     let neighbours = build_neighbors_from_voronoi(&continents_voronoi);
     let mut cells: Vec<Cell> = Vec::new();
     let mut plate_to_cells: HashMap<PlateId, Vec<CellId>> = HashMap::new();
-    
+
     let mut cell_polys = HashMap::new();
     for v_cell in continents_voronoi.iter_cells() {
         let cell_id = CellId(v_cell.site());
@@ -289,8 +308,8 @@ pub fn generate_world<R: Rng + Clone>(
         );
         cell_polys.insert(cell_id, poly);
     }
-    println!("plates: {:?}",plate_to_cells.keys());
-    
+    println!("plates: {:?}", plate_to_cells.keys());
+
     let mut plates = HashMap::new();
     for (plateid, cells) in plate_to_cells {
         let crust = if most_common_bool(cells.iter().map(|c| continents.contains_key(c))) {
@@ -307,7 +326,7 @@ pub fn generate_world<R: Rng + Clone>(
             age_myr: rng.sample(Uniform::new(120.0, 3000.0).unwrap()),
             _buoyancy: 0.0,
         };
-        plates.insert(plateid,plate);
+        plates.insert(plateid, plate);
     }
 
     let noise_scale = 50.0;
@@ -343,8 +362,8 @@ pub fn generate_world<R: Rng + Clone>(
     // )?;
     Ok(WorldMap {
         scale,
-        height_scale:scale*0.25,
-        entity_scale:scale*0.025,
+        height_scale: scale * 0.25,
+        entity_scale: scale * 0.025,
         voronoi: continents_voronoi,
         cell_height: cells_height,
         polygons: cell_polys,
@@ -432,7 +451,7 @@ struct Plate {
     vel: glam::Vec2, // world units per Myr (or arbitrary)
     crust: Crust,    // dominant crust type
     age_myr: f32,    // optional (oceanic deepens with age)
-    _buoyancy: f32,   // 0..1 (optional); else derive from crust
+    _buoyancy: f32,  // 0..1 (optional); else derive from crust
 }
 
 // For each adjacency edge crossing a plate boundary:
@@ -534,7 +553,7 @@ fn signed_coast_distance(cells: &[Cell]) -> Vec<f32> {
         })
         .collect()
 }
-fn classify_boundaries(cells: &[Cell], plates: &HashMap<PlateId,Plate>) -> Vec<BoundaryEdge> {
+fn classify_boundaries(cells: &[Cell], plates: &HashMap<PlateId, Plate>) -> Vec<BoundaryEdge> {
     let mut edges = Vec::<BoundaryEdge>::new();
     let mut seen = std::collections::HashSet::<(CellId, CellId)>::new();
 
@@ -828,7 +847,7 @@ fn laplacian_smooth(cells: &[Cell], h: &mut [f32], iters: usize) {
 }
 fn assemble_height(
     cells: &[Cell],
-    plates: &HashMap<PlateId,Plate>,
+    plates: &HashMap<PlateId, Plate>,
     fields: &Fields,
     noise: &mut impl FnMut(glam::Vec2) -> (f32, f32), // returns (fbm, ridged)
     p: &Params,
@@ -974,7 +993,7 @@ fn carve_rivers(cells: &[Cell], h: &mut [f32], threshold: usize) {
 }
 fn generate_heightmap(
     cells: &[Cell],
-    plates: HashMap<PlateId,Plate>,
+    plates: HashMap<PlateId, Plate>,
     mut noise: impl FnMut(glam::Vec2) -> (f32, f32),
 ) -> Vec<f32> {
     // Distances
