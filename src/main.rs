@@ -8,11 +8,14 @@ use crate::{
 };
 use bevy::{
     asset::RenderAssetUsages,
-    camera::{Viewport, visibility::RenderLayers},
+    camera::{Exposure, Viewport, visibility::RenderLayers},
     ecs::system::SystemState,
+    light::{AtmosphereEnvironmentMapLight, CascadeShadowConfigBuilder, NotShadowCaster, light_consts::lux},
     log::{BoxedLayer, LogPlugin, tracing_subscriber::Layer},
     math::bounding::Aabb2d,
     mesh::{Indices, PrimitiveTopology},
+    pbr::{Atmosphere, AtmosphereSettings},
+    post_process::bloom::Bloom,
     prelude::*,
     render::render_resource::BlendState,
     window::PrimaryWindow,
@@ -433,7 +436,7 @@ fn startup(
         //     .collect();
         //vertices3.reverse();
         let height = world_map.get_raw_height(&CellId(v_cell.site()));
-        
+
         let height_key = (height * 100.0).round() as u8;
         assert!((0.0..=1.0).contains(&height));
         let material = if let Some(mat) = height_material_cache.get(&height_key) {
@@ -480,6 +483,7 @@ fn startup(
                     v_cell.site_position().y as f32 * scale,
                 ),
                 Ground,
+                NotShadowCaster,
             ));
         }
         let line = Polyline3d::new(extrude_polygon_xz_to_polyline_vertices(
@@ -511,14 +515,26 @@ fn startup(
         ));
         cell.observe(click_cell).observe(over_cell);
     }
-
+// let cascade_shadow_config = CascadeShadowConfigBuilder {
+//         first_cascade_far_bound: 0.3,
+//         maximum_distance: 3.0*scale,
+//         ..default()
+//     }
+//     .build();
     commands.spawn((
-        DirectionalLight::default(),
+        DirectionalLight {
+            shadows_enabled: true,
+            illuminance: lux::RAW_SUNLIGHT,
+            ..default()
+        },
+        //cascade_shadow_config,
         Transform::from_xyz(0.0, 200.0, -200.0).looking_at(vec3(0.0, 0.0, 0.0), Vec3::Y),
     ));
     for player in game_state.players.values_mut() {
         let valid_settlment_cells = world_map.get_valid_settlement_cells();
-        let valid_settlment_cells_i = random.0.sample(Uniform::new(0, valid_settlment_cells.len()).unwrap());
+        let valid_settlment_cells_i = random
+            .0
+            .sample(Uniform::new(0, valid_settlment_cells.len()).unwrap());
         let cell_id = valid_settlment_cells.get(valid_settlment_cells_i).copied();
         // let pos = random
         //     .0
@@ -568,26 +584,35 @@ fn startup(
                     //     enabled: player.order == 0,
                     //     ..default()
                     // },
+                    Atmosphere::EARTH,
+                    // AtmosphereSettings {
+                    //     aerial_view_lut_max_distance: 3.2e5,
+                    //     scene_units_to_m: 1e+4,
+                    //     ..Default::default()
+                    // },
+                    Bloom::NATURAL,
+                    Exposure::SUNLIGHT,
+                    AtmosphereEnvironmentMapLight::default(),
                     RtsCamera {
                         height_max: scale * 10.0,
-                        target_zoom:0.8,
+                        target_zoom: 0.8,
                         target_focus: Transform::from_translation(pos),
                         bounds: Aabb2d {
                             max: map_box.1,
                             min: map_box.0,
                         },
-                        min_angle:0.0f32.to_radians(),
+                        min_angle: 0.0f32.to_radians(),
                         ..default()
                     },
                     RtsCameraControls {
-                        key_up:KeyCode::KeyW,
-                        key_right:KeyCode::KeyD,
-                        key_down:KeyCode::KeyS,
-                        key_left:KeyCode::KeyA,
+                        key_up: KeyCode::KeyW,
+                        key_right: KeyCode::KeyD,
+                        key_down: KeyCode::KeyS,
+                        key_left: KeyCode::KeyA,
                         zoom_sensitivity: 0.25,
-                        edge_pan_restrict_to_viewport:true,
-                        enabled:  player.order == 0,
-                        pan_speed:30.0,
+                        edge_pan_restrict_to_viewport: true,
+                        enabled: player.order == 0,
+                        pan_speed: 30.0,
                         ..default()
                     },
                     Camera {
@@ -611,7 +636,7 @@ fn startup(
                 settlment,
             ));
             settlement.observe(click_settlement);
-        } 
+        }
     }
 
     // Egui camera.
@@ -819,7 +844,7 @@ fn reset_turn_ready_to_end(
 }
 fn turn_start(
     mut commands: Commands,
-    mut cameras: Query<(&mut Camera, Entity,&mut RtsCameraControls), Without<EguiContext>>,
+    mut cameras: Query<(&mut Camera, Entity, &mut RtsCameraControls), Without<EguiContext>>,
     mut turn_start: MessageReader<TurnStart>,
     mut units: Query<(&mut Unit, &Transform)>,
     mut settlements: Query<(&mut SettlementCenter, &Transform)>,
@@ -830,7 +855,7 @@ fn turn_start(
 ) {
     for turn in turn_start.read() {
         let player = game_state.players.get(&turn.player).unwrap();
-        for (mut camera, entity,mut controls) in cameras.iter_mut() {
+        for (mut camera, entity, mut controls) in cameras.iter_mut() {
             if let Some(player_camera_entity) = player.camera_entity
                 && player_camera_entity == entity
             {
@@ -875,7 +900,7 @@ fn turn_start(
                             if let Some(cell) = neighbour {
                                 let pos = world_map.get_position_for_cell(*cell);
                                 let mut unit = commands.spawn((
-                                        unit_constuction.get_template(*cell),
+                                    unit_constuction.get_template(*cell),
                                     //MeshMaterial2d(materials.add(player.color)),
                                     Transform::from_translation(pos),
                                 ));
@@ -1128,7 +1153,13 @@ struct UnitConstuction {
 }
 impl UnitConstuction {
     fn get_template(&self, cell: CellId) -> UnitTemplate {
-        UnitTemplate { unit: Unit{current_cell:cell,..self.template.unit.clone()},..self.template.clone() }
+        UnitTemplate {
+            unit: Unit {
+                current_cell: cell,
+                ..self.template.unit.clone()
+            },
+            ..self.template.clone()
+        }
     }
 }
 
