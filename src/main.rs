@@ -864,7 +864,7 @@ fn turn_start(
                             if let Some(cell) = neighbour {
                                 let pos = world_map.get_position_for_cell(*cell);
                                 let mut unit = commands.spawn((
-                                    unit_constuction.template.clone(),
+                                        unit_constuction.get_template(*cell),
                                     //MeshMaterial2d(materials.add(player.color)),
                                     Transform::from_translation(pos),
                                 ));
@@ -1114,6 +1114,11 @@ struct UnitConstuction {
     progress: f32,
     template: UnitTemplate,
     name: String,
+}
+impl UnitConstuction {
+    fn get_template(&self, cell: CellId) -> UnitTemplate {
+        UnitTemplate { unit: Unit{current_cell:cell,..self.template.unit.clone()},..self.template.clone() }
+    }
 }
 
 impl Construction for UnitConstuction {
