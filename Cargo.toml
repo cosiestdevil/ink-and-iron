@@ -32,6 +32,7 @@ libloading = "0.8.9"
 #bevy_top_down_camera = {version="0.2.0",path = "../bevy_top_down_camera"}
 bevy_panorbit_camera = { version = "0.33.0", features = ["bevy_egui"] }
 tracing-appender = "0.2.3"
+bevy_rts_camera = "0.11.1"
 #bevy_panorbit_camera = { version = "0.33.0" }
 [dependencies.bevy]
 version = "0.17.2"

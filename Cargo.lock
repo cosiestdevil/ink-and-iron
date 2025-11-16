@@ -1405,6 +1405,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_rts_camera"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d742690db5d34b9b31605844068e50f263909a06a011743c273f95d44dbe9303"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
 name = "bevy_shader"
 version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4632,6 +4641,7 @@ dependencies = [
  "bevy_pancam",
  "bevy_panorbit_camera",
  "bevy_prototype_lyon",
+ "bevy_rts_camera",
  "clap",
  "colorgrad",
  "geo",

@@ -12,7 +12,7 @@ use bevy::{
     color::palettes::css::BLACK,
     ecs::system::SystemState,
     log::{BoxedLayer, LogPlugin, tracing_subscriber::Layer},
-    math::VectorSpace,
+    math::{VectorSpace, bounding::Aabb2d},
     mesh::{CuboidMeshBuilder, Indices, PrimitiveTopology},
     prelude::*,
     render::render_resource::BlendState,
@@ -33,6 +33,7 @@ use bevy_prototype_lyon::{
     prelude::{ShapeBuilder, ShapeBuilderBase},
     shapes::{Circle, RegularPolygon},
 };
+use bevy_rts_camera::{Ground, RtsCamera, RtsCameraControls, RtsCameraPlugin};
 use bevy_tokio_tasks::TokioTasksRuntime;
 use clap::Parser;
 use colorgrad::Gradient;
@@ -127,6 +128,7 @@ fn main() -> anyhow::Result<()> {
             ShapePlugin,
             AudioPlugin,
             EasingsPlugin::default(),
+            RtsCameraPlugin,
         ))
         .add_plugins(bevy_tokio_tasks::TokioTasksPlugin::default())
         .add_plugins(EguiPlugin::default())
@@ -344,9 +346,9 @@ fn move_sun(mut light: Query<(&mut Transform, &mut DirectionalLight)>, time: Res
     let sunrise = vec3(-200.0, 0.0, 0.0);
     let sunset = vec3(200.0, 0.0, 0.0);
     let midnight = vec3(0.0, -200.0, 200.0);
-     let l0 = 0.165; // midnight -> sunrise
-    let l1 = 0.33;  // sunrise -> noon
-    let l2 = 0.33;  // noon -> sunset
+    let l0 = 0.165; // midnight -> sunrise
+    let l1 = 0.33; // sunrise -> noon
+    let l2 = 0.33; // noon -> sunset
     // ensure they add up to 1.0 exactly
     let l3 = 1.0 - (l0 + l1 + l2); // ~0.175, sunset -> midnight
 
@@ -416,7 +418,6 @@ fn startup(
     )
     .unwrap();
     let mut height_material_cache = HashMap::<u8, Handle<StandardMaterial>>::new();
-    let mut height_ocean_material_cache = HashMap::<u8, Handle<StandardMaterial>>::new();
     let outline_material = materials.add(StandardMaterial {
         base_color: Color::BLACK,
         unlit: true,
@@ -502,6 +503,7 @@ fn startup(
                     scaled_height,
                     v_cell.site_position().y as f32 * scale,
                 ),
+                Ground,
             ));
         }
         let line = Polyline3d::new(extrude_polygon_xz_to_polyline_vertices(
@@ -525,6 +527,7 @@ fn startup(
                 cell_id: CellId(v_cell.site()),
                 outline: outline_mesh.clone(),
             },
+            Ground,
             children![(
                 Mesh3d(outline_mesh),
                 MeshMaterial3d(outline_material.clone()),
@@ -539,21 +542,15 @@ fn startup(
         Transform::from_xyz(0.0, 200.0, -200.0).looking_at(vec3(0.0, 0.0, 0.0), Vec3::Y),
     ));
     for player in game_state.players.values_mut() {
-        let mut pos = random.0.sample(
-            Uniform::<Vec2>::new(Vec2::ZERO, Vec2::new(16.0 * scale, 9.0 * scale)).unwrap(),
-        );
+        let mut pos = random
+            .0
+            .sample(Uniform::<Vec2>::new(map_box.0, map_box.1).unwrap());
         let cell_id = world_map.get_cell_for_position(pos);
         if let Some(cell_id) = cell_id {
             pos = world_map.voronoi.cell(cell_id.0).site_position().to_vec2() * scale;
-
+            let player_mat = materials.add(player.color);
             let settlement_mesh = meshes.add(Cuboid::from_length(scale * 0.025));
-            let unit_mesh = ShapeBuilder::with(&Circle {
-                radius: 5.0,
-                center: Vec2::ZERO,
-            })
-            .fill(player.color)
-            .stroke((BLACK, 1.0))
-            .build();
+            let unit_mesh = meshes.add(Cylinder::new(scale * 0.025, scale * 0.025));
             let name = player
                 .settlement_names
                 .pop()
@@ -568,7 +565,8 @@ fn startup(
                     cost: 2.0,
                     progress: 0.0,
                     template: UnitTemplate {
-                        mesh: unit_mesh,
+                        mesh: Mesh3d(unit_mesh),
+                        material: MeshMaterial3d(player_mat.clone()),
                         unit: Unit {
                             speed: 150.0,
                             used_speed: 0.0,
@@ -581,16 +579,28 @@ fn startup(
                     },
                 })],
             };
-
+            let height = *(world_map.cell_height.get(&cell_id).unwrap()) * (scale * 0.25);
+            let pos = pos.extend(height + (scale * 0.025)).xzy();
             let camera_entity = commands
                 .spawn((
                     Camera3d { ..default() },
-                    PanOrbitCamera {
-                        enabled: player.order == 0,
+                    // PanOrbitCamera {
+                    //     enabled: player.order == 0,
+                    //     ..default()
+                    // },
+                    RtsCamera {
+                        height_max: scale * 10.0,
+                        target_focus: Transform::from_translation(pos),
+                        bounds: Aabb2d {
+                            max: map_box.1,
+                            min: map_box.0,
+                        },
                         ..default()
                     },
-                    Transform::from_translation(pos.extend(20.0 * scale).xzy())
-                        .looking_at(pos.extend(0.0).xzy(), Vec3::Y),
+                    RtsCameraControls {
+                        zoom_sensitivity: 0.25,
+                        ..default()
+                    },
                     Camera {
                         is_active: player.order == 0,
 
@@ -604,13 +614,11 @@ fn startup(
                 ))
                 .id();
             player.camera_entity = Some(camera_entity);
-            let v_cell = world_map.voronoi.cell(cell_id.0);
-            let height =
-                *(world_map.cell_height.get(&CellId(v_cell.site())).unwrap()) * (scale * 0.25);
+
             let mut settlement = commands.spawn((
                 Mesh3d(settlement_mesh),
-                MeshMaterial3d(materials.add(player.color)),
-                Transform::from_translation(pos.extend(height + (scale * 0.025)).xzy()),
+                MeshMaterial3d(player_mat.clone()),
+                Transform::from_translation(pos),
                 settlment,
             ));
             settlement.observe(click_settlement);
@@ -869,7 +877,7 @@ fn turn_start(
                                 Transform::from_xyz(
                                     transform.translation.x,
                                     transform.translation.y,
-                                    4.0,
+                                    transform.translation.z,
                                 ),
                             ));
                             unit.observe(click_unit);
@@ -1005,8 +1013,12 @@ fn move_unit(
                 .site_position()
                 .to_vec2()
                 * world_map.scale;
+            let next_cell_height =
+                *world_map.cell_height.get(&next_cell).unwrap() * (world_map.scale * 0.025);
+            let next_cell_pos = next_cell_pos.extend(next_cell_height);
+
             if move_timer.is_finished() {
-                *transform = Transform::from_translation(next_cell_pos.extend(3.0));
+                *transform = Transform::from_translation(next_cell_pos);
                 unit.current_cell = next_cell;
                 unit.next_cell = None;
             } else {
@@ -1016,8 +1028,11 @@ fn move_unit(
                     .site_position()
                     .to_vec2()
                     * world_map.scale;
+                let curent_cell_height =
+                    *world_map.cell_height.get(&CellId(current_cell)).unwrap() * (world_map.scale * 0.025);
+                let current_cell_pos = current_cell_pos.extend(curent_cell_height);
                 let new_pos = current_cell_pos.lerp(next_cell_pos, move_timer.fraction());
-                *transform = Transform::from_translation(new_pos.extend(3.0));
+                *transform = Transform::from_translation(new_pos);
             }
         }
     }
@@ -1071,7 +1086,7 @@ fn over_cell(
     selected: Res<Selection>,
     world_map: Res<WorldMap>,
     mut commands: Commands,
-    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let (graph, nodes) =
         pathfinding::get_graph(world_map.voronoi.clone(), world_map.cell_height.clone());
@@ -1090,9 +1105,9 @@ fn over_cell(
                 if let Some((cell, entity)) = cell {
                     let mut e = commands.entity(entity);
                     e.with_child((
-                        Mesh2d(cell.outline.clone()),
-                        MeshMaterial2d(materials.add(bevy::color::Color::WHITE)),
-                        Transform::from_xyz(0.0, 0.0, 2.0),
+                        Mesh3d(cell.outline.clone()),
+                        MeshMaterial3d(materials.add(Color::WHITE)),
+                        Transform::from_xyz(0.0, 2.0, 0.0),
                         CellHighlight {
                             unit: Some(unit_entity),
                         },
@@ -1171,7 +1186,8 @@ impl Construction for UnitConstuction {
 #[derive(Bundle, Clone)]
 struct UnitTemplate {
     unit: Unit,
-    mesh: Shape,
+    mesh: Mesh3d,
+    material: MeshMaterial3d<StandardMaterial>,
 }
 #[derive(Clone)]
 enum ConstructionJob {
