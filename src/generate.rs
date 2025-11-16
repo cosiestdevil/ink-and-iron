@@ -63,11 +63,30 @@ impl WorldMap {
         )
         .unwrap()
     }
-    pub fn iter_cells(&self)->impl Iterator<Item = VoronoiCell<'_>>{
+    pub fn iter_cells(&self) -> impl Iterator<Item = VoronoiCell<'_>> {
         self.voronoi.iter_cells()
     }
-    pub fn get_raw_height(&self, id:&CellId)->f32{
+    pub fn get_raw_height(&self, id: &CellId) -> f32 {
         *(self.cell_height.get(id).unwrap())
+    }
+    pub fn get_valid_settlement_cells(&self) -> Vec<CellId> {
+        let mut res = vec![];
+        for cell in self.voronoi.iter_cells() {
+            let cell_id = CellId(cell.site());
+            let height = self.get_raw_height(&cell_id);
+            if height < 0.5 {
+                continue;
+            }
+
+            if !cell.iter_neighbors().all(|c| {
+                let n_height = self.get_raw_height(&CellId(c));
+                n_height >= 0.5 && (height - n_height).abs() < 0.1
+            }) {
+                continue;
+            }
+            res.push(cell_id);
+        }
+        res
     }
 }
 impl Deref for CellId {

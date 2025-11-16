@@ -517,10 +517,13 @@ fn startup(
         Transform::from_xyz(0.0, 200.0, -200.0).looking_at(vec3(0.0, 0.0, 0.0), Vec3::Y),
     ));
     for player in game_state.players.values_mut() {
-        let pos = random
-            .0
-            .sample(Uniform::<Vec2>::new(map_box.0, map_box.1).unwrap());
-        let cell_id = world_map.get_cell_for_position(pos);
+        let valid_settlment_cells = world_map.get_valid_settlement_cells();
+        let valid_settlment_cells_i = random.0.sample(Uniform::new(0, valid_settlment_cells.len()).unwrap());
+        let cell_id = valid_settlment_cells.get(valid_settlment_cells_i).copied();
+        // let pos = random
+        //     .0
+        //     .sample(Uniform::<Vec2>::new(map_box.0, map_box.1).unwrap());
+        // let cell_id = world_map.get_cell_for_position(pos);
         if let Some(cell_id) = cell_id {
             let pos = world_map.get_position_for_cell(cell_id);
             let player_mat = materials.add(player.color);
@@ -599,9 +602,7 @@ fn startup(
                 settlment,
             ));
             settlement.observe(click_settlement);
-        } else {
-            info!("Couldn't find cell at {}", pos);
-        }
+        } 
     }
 
     // Egui camera.
