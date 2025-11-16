@@ -126,7 +126,7 @@ fn main() -> anyhow::Result<()> {
         .add_plugins(EguiPlugin::default())
         .add_message::<TurnStart>()
         .init_state::<AppState>()
-        .insert_resource(GameState::new(1))
+        .insert_resource(GameState::new(2))
         .insert_resource(Random(rng))
         .insert_resource(Selection::None)
         .insert_resource(a)
@@ -579,6 +579,7 @@ fn startup(
                     },
                     RtsCameraControls {
                         zoom_sensitivity: 0.25,
+                        enabled:  player.order == 0,
                         ..default()
                     },
                     Camera {
@@ -810,7 +811,7 @@ fn reset_turn_ready_to_end(
 }
 fn turn_start(
     mut commands: Commands,
-    mut cameras: Query<(&mut Camera, Entity), Without<EguiContext>>,
+    mut cameras: Query<(&mut Camera, Entity,&mut RtsCameraControls), Without<EguiContext>>,
     mut turn_start: MessageReader<TurnStart>,
     mut units: Query<(&mut Unit, &Transform)>,
     mut settlements: Query<(&mut SettlementCenter, &Transform)>,
@@ -821,13 +822,15 @@ fn turn_start(
 ) {
     for turn in turn_start.read() {
         let player = game_state.players.get(&turn.player).unwrap();
-        for (mut camera, entity) in cameras.iter_mut() {
+        for (mut camera, entity,mut controls) in cameras.iter_mut() {
             if let Some(player_camera_entity) = player.camera_entity
                 && player_camera_entity == entity
             {
                 camera.is_active = true;
+                controls.enabled = true;
             } else {
                 camera.is_active = false;
+                controls.enabled = false;
             }
         }
         info!("Turn started for player: {:?}", turn.player);
