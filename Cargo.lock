@@ -1164,16 +1164,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy_panorbit_camera"
-version = "0.33.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "096f90f6da63218827d94f13a65c5e3db7ad612ce56043fdbaba03923724e060"
-dependencies = [
- "bevy",
- "bevy_egui",
-]
-
-[[package]]
 name = "bevy_pbr"
 version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1407,8 +1397,7 @@ dependencies = [
 [[package]]
 name = "bevy_rts_camera"
 version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d742690db5d34b9b31605844068e50f263909a06a011743c273f95d44dbe9303"
+source = "git+https://github.com/cosiestdevil/bevy_rts_camera.git?branch=viewport_panning#a83c43dece59635358fcc64210a82cb58623eaa0"
 dependencies = [
  "bevy",
 ]
@@ -4639,7 +4628,6 @@ dependencies = [
  "bevy_egui",
  "bevy_kira_audio",
  "bevy_pancam",
- "bevy_panorbit_camera",
  "bevy_prototype_lyon",
  "bevy_rts_camera",
  "clap",

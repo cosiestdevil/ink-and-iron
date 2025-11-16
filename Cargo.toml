@@ -23,17 +23,17 @@ smallvec = "1.15.1"
 voronoice = "0.2.0"
 serde = { version = "1.0.228", features = ["derive"] }
 bevy-tokio-tasks = "0.17.0"
-tokio = { workspace = true}
+tokio = { workspace = true }
 bevy_prototype_lyon = "0.15.0"
 bevy_kira_audio = { version = "0.24.0", features = ["wav"] }
 bevy_easings = "0.17.1"
 llm-api = { path = "./llm-api" }
 libloading = "0.8.9"
-#bevy_top_down_camera = {version="0.2.0",path = "../bevy_top_down_camera"}
-bevy_panorbit_camera = { version = "0.33.0", features = ["bevy_egui"] }
+
+#bevy_panorbit_camera = { version = "0.33.0", features = ["bevy_egui"] }
 tracing-appender = "0.2.3"
-bevy_rts_camera = "0.11.1"
-#bevy_panorbit_camera = { version = "0.33.0" }
+bevy_rts_camera = { version = "0.11.1", git="https://github.com/cosiestdevil/bevy_rts_camera.git", branch = "viewport_panning"}
+
 [dependencies.bevy]
 version = "0.17.2"
 default-features = false

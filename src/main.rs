@@ -570,16 +570,24 @@ fn startup(
                     // },
                     RtsCamera {
                         height_max: scale * 10.0,
+                        target_zoom:0.8,
                         target_focus: Transform::from_translation(pos),
                         bounds: Aabb2d {
                             max: map_box.1,
                             min: map_box.0,
                         },
+                        min_angle:0.0f32.to_radians(),
                         ..default()
                     },
                     RtsCameraControls {
+                        key_up:KeyCode::KeyW,
+                        key_right:KeyCode::KeyD,
+                        key_down:KeyCode::KeyS,
+                        key_left:KeyCode::KeyA,
                         zoom_sensitivity: 0.25,
+                        edge_pan_restrict_to_viewport:true,
                         enabled:  player.order == 0,
+                        pan_speed:30.0,
                         ..default()
                     },
                     Camera {
