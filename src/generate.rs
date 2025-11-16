@@ -259,7 +259,7 @@ pub fn generate_world<R: Rng + Clone>(
                 x: v_cell.site_position().x as f32,
                 y: v_cell.site_position().y as f32,
             },
-            continent: if v_cell.is_on_hull() {
+            _continent: if v_cell.is_on_hull() {
                 None
             } else {
                 continents.get(&cell_id).cloned()
@@ -299,13 +299,13 @@ pub fn generate_world<R: Rng + Clone>(
             Crust::Oceanic
         };
         let plate = Plate {
-            id: plateid,
+            _id: plateid,
             crust,
             vel: rand::distr::Uniform::new(Vec2::new(-1.0, -1.0), Vec2::new(1.0, 1.0))
                 .unwrap()
                 .sample(&mut rng),
             age_myr: rng.sample(Uniform::new(120.0, 3000.0).unwrap()),
-            buoyancy: 0.0,
+            _buoyancy: 0.0,
         };
         plates.insert(plateid,plate);
     }
@@ -416,7 +416,7 @@ struct Cell {
     pos: glam::Vec2, // site/centroid in world units
     neighbors: smallvec::SmallVec<[CellId; 8]>,
     plate: PlateId,
-    continent: Option<ContinentId>,
+    _continent: Option<ContinentId>,
     is_ocean: bool, // from your continent/island grouping
 }
 
@@ -428,11 +428,11 @@ enum Crust {
 
 #[derive(Clone)]
 struct Plate {
-    id: PlateId,
+    _id: PlateId,
     vel: glam::Vec2, // world units per Myr (or arbitrary)
     crust: Crust,    // dominant crust type
     age_myr: f32,    // optional (oceanic deepens with age)
-    buoyancy: f32,   // 0..1 (optional); else derive from crust
+    _buoyancy: f32,   // 0..1 (optional); else derive from crust
 }
 
 // For each adjacency edge crossing a plate boundary:
@@ -447,8 +447,8 @@ struct BoundaryEdge {
     a: CellId,
     b: CellId, // adjacent map cells with plate[a] != plate[b]
     bt: BoundaryType,
-    n_ab: glam::Vec2, // unit normal pointing from b -> a
-    ocean_on_a: bool, // is the a-side ocean (for subduction side tests)
+    _n_ab: glam::Vec2, // unit normal pointing from b -> a
+    _ocean_on_a: bool, // is the a-side ocean (for subduction side tests)
 }
 
 struct Fields {
@@ -566,8 +566,8 @@ fn classify_boundaries(cells: &[Cell], plates: &HashMap<PlateId,Plate>) -> Vec<B
                     a,
                     b,
                     bt,
-                    n_ab,
-                    ocean_on_a: cells[a.0].is_ocean,
+                    _n_ab: n_ab,
+                    _ocean_on_a: cells[a.0].is_ocean,
                 });
             }
         }

@@ -1,5 +1,5 @@
 #![allow(clippy::too_many_arguments)]
-use std::{collections::HashMap, f32::consts::PI, sync::OnceLock, time::Duration};
+use std::{collections::HashMap, sync::OnceLock, time::Duration};
 
 use crate::{
     generate::{CellId, WorldMap},
@@ -9,11 +9,10 @@ use crate::{
 use bevy::{
     asset::RenderAssetUsages,
     camera::{Viewport, visibility::RenderLayers},
-    color::palettes::css::BLACK,
     ecs::system::SystemState,
     log::{BoxedLayer, LogPlugin, tracing_subscriber::Layer},
-    math::{VectorSpace, bounding::Aabb2d},
-    mesh::{CuboidMeshBuilder, Indices, PrimitiveTopology},
+    math::bounding::Aabb2d,
+    mesh::{Indices, PrimitiveTopology},
     prelude::*,
     render::render_resource::BlendState,
     window::PrimaryWindow,
@@ -25,14 +24,7 @@ use bevy_egui::{
     egui::{self, Response, Ui},
 };
 use bevy_kira_audio::prelude::*;
-use bevy_pancam::{PanCam, PanCamPlugin};
-use bevy_panorbit_camera::{PanOrbitCamera, PanOrbitCameraPlugin};
-use bevy_prototype_lyon::{
-    entity::Shape,
-    plugin::ShapePlugin,
-    prelude::{ShapeBuilder, ShapeBuilderBase},
-    shapes::{Circle, RegularPolygon},
-};
+use bevy_prototype_lyon::plugin::ShapePlugin;
 use bevy_rts_camera::{Ground, RtsCamera, RtsCameraControls, RtsCameraPlugin};
 use bevy_tokio_tasks::TokioTasksRuntime;
 use clap::Parser;
@@ -132,7 +124,6 @@ fn main() -> anyhow::Result<()> {
         ))
         .add_plugins(bevy_tokio_tasks::TokioTasksPlugin::default())
         .add_plugins(EguiPlugin::default())
-        .add_plugins(PanOrbitCameraPlugin)
         .add_message::<TurnStart>()
         .init_state::<AppState>()
         .insert_resource(GameState::new(1))
@@ -338,7 +329,7 @@ where
 
 fn smooth01(t: f32) -> f32 {
     // standard smoothstep from 0..1
-    return t * t * (3.0 - 2.0 * t);
+    t * t * (3.0 - 2.0 * t)
 }
 fn move_sun(mut light: Query<(&mut Transform, &mut DirectionalLight)>, time: Res<Time>) {
     let noon = vec3(0.0, 200.0, -200.0);
@@ -457,7 +448,7 @@ fn startup(
         //     .map(|(v, uv)| (v.extend(0.0).xzy(), *uv))
         //     .collect();
         //vertices3.reverse();
-        let mut height = *(world_map.cell_height.get(&CellId(v_cell.site())).unwrap());
+        let height = *(world_map.cell_height.get(&CellId(v_cell.site())).unwrap());
         let height_key = (height * 100.0).round() as u8;
         assert!((0.0..=1.0).contains(&height));
         let material = if let Some(mat) = height_material_cache.get(&height_key) {
@@ -570,6 +561,7 @@ fn startup(
                         mesh: Mesh3d(unit_mesh),
                         material: MeshMaterial3d(player_mat.clone()),
                         unit: Unit {
+                            name: "Unit 1".to_string(),
                             speed: 150.0,
                             used_speed: 0.0,
                             current_cell: cell_id,
@@ -703,7 +695,7 @@ fn ui_example_system(
                     Selection::None => {}
                     Selection::Unit(entity) => {
                         let unit = units.get_mut(entity).unwrap();
-                        ui.label(format!("Unit"));
+                        ui.label(unit.name.clone());
                         ui.label(format!("Speed: {}/{}", unit.used_speed, unit.speed));
                     }
                     Selection::Settlement(_entity) => {}
@@ -834,7 +826,7 @@ fn reset_turn_ready_to_end(
 }
 fn turn_start(
     mut commands: Commands,
-    mut cameras: Query<(&mut Camera, &mut PanCam, Entity), Without<EguiContext>>,
+    mut cameras: Query<(&mut Camera, Entity), Without<EguiContext>>,
     mut turn_start: MessageReader<TurnStart>,
     mut units: Query<(&mut Unit, &Transform)>,
     mut settlements: Query<(&mut SettlementCenter, &Transform)>,
@@ -845,15 +837,13 @@ fn turn_start(
 ) {
     for turn in turn_start.read() {
         let player = game_state.players.get(&turn.player).unwrap();
-        for (mut camera, mut pancam, entity) in cameras.iter_mut() {
+        for (mut camera, entity) in cameras.iter_mut() {
             if let Some(player_camera_entity) = player.camera_entity
                 && player_camera_entity == entity
             {
                 camera.is_active = true;
-                pancam.enabled = true;
             } else {
                 camera.is_active = false;
-                pancam.enabled = false;
             }
         }
         info!("Turn started for player: {:?}", turn.player);
@@ -908,7 +898,7 @@ struct Player {
     id: PlayerId,
     order: usize,
     color: Color,
-    local: bool,
+    _local: bool,
     camera_entity: Option<Entity>,
     settlement_names: Vec<String>,
     settlement_context: SettlementNameCtx,
@@ -929,7 +919,7 @@ impl GameState {
             let player = Player {
                 order: i,
                 id: PlayerId(i),
-                local: true,
+                _local: true,
                 settlement_names: vec![],
                 settlement_context: SettlementNameCtx {
                     civilisation_name: civ.to_string(),
@@ -947,18 +937,11 @@ impl GameState {
         }
     }
 }
-#[derive(Component)]
-struct TurnAction {
-    player: PlayerId,
-}
 fn set_unit_next_cell(
-    mut commands: Commands,
-    mut units: Query<(&mut Unit, Entity, &Transform)>,
+    mut units: Query<&mut Unit>,
     world_map: Res<WorldMap>,
 ) {
-    for (mut unit, entity, transform) in units.iter_mut() {
-        let mut a = commands.entity(entity);
-        a.remove::<TurnAction>();
+    for mut unit in units.iter_mut() {
         if let Some(goal) = unit.goal {
             if unit.current_cell == goal {
                 unit.goal = None;
@@ -993,9 +976,6 @@ fn set_unit_next_cell(
                                 unit.move_timer = None;
                                 continue;
                             }
-                            a.insert(TurnAction {
-                                player: unit.controller,
-                            });
                             unit.used_speed += distance;
                             unit.next_cell = Some(nex_cell);
                             unit.move_timer = Some(Timer::from_seconds(5.0, TimerMode::Once));
@@ -1110,7 +1090,7 @@ fn over_cell(
                         MeshMaterial3d(materials.add(Color::WHITE)),
                         Transform::from_xyz(0.0, 2.0, 0.0),
                         CellHighlight {
-                            unit: Some(unit_entity),
+                            _unit: Some(unit_entity),
                         },
                     ));
                 }
@@ -1127,7 +1107,7 @@ struct Cell {
 }
 #[derive(Component)]
 struct CellHighlight {
-    unit: Option<Entity>,
+    _unit: Option<Entity>,
 }
 
 #[derive(Resource)]
@@ -1139,6 +1119,7 @@ enum Selection {
 
 #[derive(Component, Clone)]
 struct Unit {
+    name:String,
     controller: PlayerId,
     speed: f32,
     used_speed: f32,
@@ -1200,17 +1181,7 @@ impl ConstructionJob {
             ConstructionJob::Unit(unit_constuction) => {
                 ui.label(format!(
                     "{}: {}/{}",
-                    unit_constuction.name, unit_constuction.progress, unit_constuction.cost
-                ));
-            }
-        }
-    }
-    pub fn available_label(&self, ui: &mut Ui) {
-        match self {
-            ConstructionJob::Unit(unit_constuction) => {
-                ui.label(format!(
-                    "{}: {}",
-                    unit_constuction.name, unit_constuction.cost
+                    unit_constuction.name, unit_constuction.progress(), unit_constuction.cost()
                 ));
             }
         }
@@ -1228,215 +1199,17 @@ impl ConstructionJob {
     }
 }
 
-/// Create a prism mesh from a list of 3D vertices defining the *bottom* face of the prism.
-/// All vertices should share the same Y coordinate (e.g. 0.0).
-pub fn prism_from_face(bottom_face: &[(Vec3, Vec2)], height: f32) -> Mesh {
-    assert!(
-        bottom_face.len() >= 3,
-        "Need at least 3 vertices for a polygon"
-    );
-    let n = bottom_face.len();
-    let mut positions: Vec<[f32; 3]> = Vec::with_capacity(n * 2);
-    let mut normals: Vec<[f32; 3]> = Vec::with_capacity(n * 2);
-    let mut uvs: Vec<[f32; 2]> = Vec::with_capacity(n * 2);
-    let mut indices: Vec<u32> = Vec::new();
-    // --- Build vertices: bottom ring then top ring ---
-    // Bottom vertices (as given)
-    for (v, uv) in bottom_face.iter() {
-        positions.push([v.x, v.y, v.z]);
-        // Rough normal for bottom face (pointing downwards)
-        normals.push([0.0, -1.0, 0.0]);
-        uvs.push([v.x, v.z]);
-        // simple planar UV, tweak as you like
-    }
-    // Top vertices (extruded by height along +Y)
-    for (v, uv) in bottom_face.iter() {
-        positions.push([v.x, v.y + height, v.z]);
-        // Rough normal for top face (pointing up)
-        normals.push([0.0, 1.0, 0.0]);
-        uvs.push([v.x, v.z]);
-    }
-    // ------------- SIDE VERTICES (separate from caps) -------------
-
-    // Compute smooth side normals per vertex (average of adjacent edge normals)
-    let mut side_normals: Vec<Vec3> = vec![Vec3::ZERO; n];
-
-    for i in 0..n {
-        let (v_i, _) = bottom_face[i];
-        let (v_next, _) = bottom_face[(i + 1) % n];
-
-        let edge = v_next - v_i;
-        // "up" is +Y; cross to get outward normal.
-        // Depending on your winding (CW/CCW), you may need edge.cross(Vec3::Y) instead.
-        let face_normal = Vec3::Y.cross(edge).normalize_or_zero();
-
-        side_normals[i] += face_normal;
-        side_normals[(i + 1) % n] += face_normal;
-    }
-
-    for nrm in &mut side_normals {
-        *nrm = nrm.normalize_or_zero();
-    }
-
-    // Compute a simple "u" coordinate along the perimeter for side UVs
-    let mut edge_lengths = vec![0.0_f32; n + 1];
-    let mut perimeter = 0.0_f32;
-
-    for i in 0..n {
-        let (v_i, _) = bottom_face[i];
-        let (v_next, _) = bottom_face[(i + 1) % n];
-        perimeter += (v_next - v_i).length();
-        edge_lengths[i + 1] = perimeter;
-    }
-
-    // Side bottom ring: indices [2n .. 3n)
-    let side_bottom_offset = positions.len() as u32;
-    for i in 0..n {
-        let (v, _) = bottom_face[i];
-        let t = if perimeter > 0.0 {
-            edge_lengths[i] / perimeter
-        } else {
-            0.0
-        };
-        let nrm = side_normals[i];
-
-        positions.push([v.x, v.y, v.z]);
-        normals.push([nrm.x, nrm.y, nrm.z]);
-        uvs.push([t, 0.0]); // v=0 at bottom
-    }
-
-    // Side top ring: indices [3n .. 4n)
-    let side_top_offset = positions.len() as u32;
-    for i in 0..n {
-        let (v, _) = bottom_face[i];
-        let t = if perimeter > 0.0 {
-            edge_lengths[i] / perimeter
-        } else {
-            0.0
-        };
-        let nrm = side_normals[i];
-
-        positions.push([v.x, v.y + height, v.z]);
-        normals.push([nrm.x, nrm.y, nrm.z]);
-        uvs.push([t, 1.0]); // v=1 at top
-    }
-
-    // --- Faces ---
-    // 1. Bottom face: fan triangulation (0 is the center vertex of the fan)
-    // Assumes a convex polygon and properly ordered vertices.
-    for i in 1..(n - 1) {
-        indices.push(0 as u32);
-        indices.push((i + 1) as u32);
-        indices.push(i as u32);
-    }
-    // 2. Top face: same fan but on the top ring, with reversed winding
-    // Top ring starts at index n
-    let top_offset = n as u32;
-    for i in 1..(n - 1) {
-        indices.push(top_offset);
-        // center
-        indices.push(top_offset + i as u32);
-        indices.push(top_offset + (i + 1) as u32);
-    }
-    // 3. Side faces: quads split into two triangles per edge
-    // For each edge (i -> next) on the polygon:
-    for i in 0..n {
-        let next = (i + 1) % n;
-        let bi = i as u32;
-        // bottom i
-        let bn = next as u32;
-        // bottom next
-        let ti = top_offset + i as u32;
-        // top i
-        let tn = top_offset + next as u32;
-        // top next
-        // Side quad as two triangles.
-        // Adjust order if your normals appear inverted.
-        indices.extend_from_slice(&[
-            bi, bn, tn, // first triangle
-            bi, tn, ti,
-            // second triangle
-        ]);
-    }
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::all());
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-    mesh.insert_indices(Indices::U32(indices));
-    mesh
-}
-pub fn build_strip_mesh(path: &[Vec2], height: f32) -> Mesh {
-    assert!(path.len() >= 2, "Need at least 2 points for a strip");
-
-    let n = path.len();
-    let vert_count = n * 2;
-
-    // Bevy expects Vec<[f32; N]> for attributes
-    let mut positions: Vec<[f32; 3]> = Vec::with_capacity(vert_count);
-    let mut normals: Vec<[f32; 3]> = Vec::with_capacity(vert_count);
-    let mut uvs: Vec<[f32; 2]> = Vec::with_capacity(vert_count);
-
-    // --- build vertices & normals ---
-    for i in 0..n {
-        let p = path[i];
-
-        // 1) tangent along path (in XZ as Vec2)
-        let dir: Vec2 = if i == 0 {
-            (path[1] - path[0]).normalize()
-        } else if i == n - 1 {
-            (path[i] - path[i - 1]).normalize()
-        } else {
-            let d1 = (path[i] - path[i - 1]).normalize();
-            let d2 = (path[i + 1] - path[i]).normalize();
-            (d1 + d2).normalize()
-        };
-
-        // 2) left-hand normal in XZ plane: (-dz, dx)
-        //    If you want the other side, just negate this.
-        let n2 = Vec2::new(-dir.y, dir.x).normalize();
-
-        let normal3 = [n2.x, 0.0, n2.y];
-
-        // bottom vertex (y = 0)
-        positions.push([p.x, 0.0, p.y]);
-        normals.push(normal3);
-        // simple UVs: u along path, v along height
-        let u = i as f32 / (n as f32 - 1.0);
-        uvs.push([u, 0.0]);
-
-        // top vertex (y = height)
-        positions.push([p.x, height, p.y]);
-        normals.push(normal3);
-        uvs.push([u, 1.0]);
-    }
-
-    // --- triangle strip indices: 0,1,2,3,... ---
-    let mut indices: Vec<u32> = Vec::with_capacity(vert_count);
-    for i in 0..vert_count {
-        indices.push(i as u32);
-    }
-
-    // --- build mesh ---
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleStrip, RenderAssetUsages::all());
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-    mesh.insert_indices(Indices::U32(indices));
-
-    mesh
-}
-
 /// Build a single mesh: extruded strip + top & bottom caps.
 /// `path` is in XZ (Vec2(x, z)), extrusion along +Y by `height`.
 pub fn build_extruded_with_caps(
     path: &[Vec2],
     height: f32,
-    world_center: Vec2,
-    map_box: (Vec2, Vec2),
+    _world_center: Vec2,
+    _map_box: (Vec2, Vec2),
 ) -> Mesh {
     assert!(path.len() >= 3, "Need at least 3 points for caps");
-    let (min, max) = map_box;
-    let size = max - min;
+    //let (min, max) = map_box;
+    //let size = max - min;
     let n = path.len();
 
     // vertex layout:
@@ -1478,7 +1251,7 @@ pub fn build_extruded_with_caps(
         // bottom vertex
         positions.push([p.x, 0.0, p.y]);
         normals.push(normal3);
-        let u = i as f32 / (n as f32 - 1.0);
+        //let u = i as f32 / (n as f32 - 1.0);
         uvs.push([0.0, 0.0]);
 
         // top vertex
@@ -1490,22 +1263,20 @@ pub fn build_extruded_with_caps(
     // -----------------
     // 2) TOP CAP VERTICES (y = height, normal +Y)
     // -----------------
-    for i in 0..n {
-        let p = path[i];
+for p in path.iter().take(n){
         positions.push([p.x, height, p.y]);
         normals.push([0.0, 1.0, 0.0]);
         // simple planar UV (you can rescale/center as needed)
-        let world_pos = p + world_center;
-        let mut uv = ((world_pos - min) / size) * 4.0;
-        uv = uv.fract_gl();
+        // let world_pos = p + world_center;
+        // let mut uv = ((world_pos - min) / size) * 4.0;
+        // uv = uv.fract_gl();
         uvs.push(p.fract_gl().to_array());
     }
 
     // -----------------
     // 3) BOTTOM CAP VERTICES (y = 0, normal -Y)
     // -----------------
-    for i in 0..n {
-        let p = path[i];
+    for p in path.iter().take(n){
         positions.push([p.x, 0.0, p.y]);
         normals.push([0.0, -1.0, 0.0]);
         uvs.push([0.0, 0.0]);
@@ -1574,22 +1345,6 @@ pub fn build_extruded_with_caps(
     mesh.insert_indices(Indices::U32(indices));
 
     mesh
-}
-fn centroid(points: &[(Vec2, Vec2)]) -> Option<Vec2> {
-    if points.is_empty() {
-        return None;
-    }
-
-    // Sum all points
-    let sum = points
-        .iter()
-        .map(|(v, w)| v)
-        .copied()
-        .reduce(|a, b| a + b)
-        .unwrap();
-
-    // Divide by the number of points to get the average
-    Some(sum / points.len() as f32)
 }
 pub fn outline_top_from_face(bottom_face: &[(Vec3, Vec2)], height: f32, y_offset: f32) -> Mesh {
     assert!(

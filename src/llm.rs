@@ -71,7 +71,7 @@ pub async fn get_llm() -> &'static LLMOps {
 fn load_llm() -> anyhow::Result<(LLMOps,Library)> {
     unsafe {
         let mut lib = libloading::Library::new("llm_provider_cuda");
-        if let Err(err) = lib  {
+        if let Err(_err) = lib  {
             info!("Cuda load failed, falling back to CPU LLM");
             lib = libloading::Library::new("llm_provider");
         }

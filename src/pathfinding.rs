@@ -1,6 +1,5 @@
 use crate::generate::CellId;
 use glam::Vec2;
-use glam::Vec3;
 use petgraph::Graph;
 use petgraph::prelude::*;
 use std::collections::HashMap;
@@ -44,7 +43,6 @@ struct AStarNode {
     cell_id: CellId,
     g: f32,
     h: f32,
-    f: f32,
     parent: Option<Box<AStarNode>>,
 }
 
@@ -54,9 +52,11 @@ impl AStarNode {
             cell_id,
             g,
             h,
-            f: g + h,
             parent,
         }
+    }
+    fn f(&self)->f32{
+        self.g+self.h
     }
 }
 
@@ -80,7 +80,7 @@ pub fn a_star(
     while !open_list.is_empty() {
         let current = open_list
             .iter()
-            .min_by(|a, b| a.f.total_cmp(&b.f))
+            .min_by(|a, b| a.f().total_cmp(&b.f()))
             .unwrap()
             .clone();
         if current.cell_id == goal {
@@ -134,16 +134,11 @@ fn reconstruct_path(current: AStarNode) -> Vec<CellId> {
 
 pub trait ToVec2 {
     fn to_vec2(&self) -> Vec2;
-    fn to_vec3(&self, z: f32) -> Vec3;
 }
 
 impl ToVec2 for voronoice::Point {
     fn to_vec2(&self) -> Vec2 {
         Vec2::new(self.x as f32, self.y as f32)
-    }
-
-    fn to_vec3(&self, z: f32) -> Vec3 {
-        Vec3::new(self.x as f32, self.y as f32, z)
     }
 }
 
