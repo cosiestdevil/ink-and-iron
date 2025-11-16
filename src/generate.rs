@@ -26,6 +26,8 @@ pub struct ContinentId(usize);
 #[derive(Resource)]
 pub struct WorldMap {
     pub scale: f32,
+    pub height_scale:f32,
+    pub entity_scale:f32,
     pub voronoi: Voronoi,
     pub cell_height: HashMap<CellId, f32>,
     polygons: HashMap<CellId, geo::Polygon>,
@@ -39,9 +41,14 @@ impl WorldMap {
         }
         None
     }
-    pub fn get_position_for_cell(&self, id:CellId)->Vec2{
+    pub fn get_position_for_cell(&self, id:CellId)->Vec3{
         let cell = self.voronoi.cell(id.0);
-        cell.site_position().to_vec2() * self.scale
+        let xz = cell.site_position().to_vec2() * self.scale;
+        let height = self.cell_height.get(&id).unwrap() * (self.height_scale);
+        xz.extend(height).xzy()
+    }
+    pub fn get_neighbours(&self,id:CellId)->Vec<CellId>{
+        self.voronoi.cell(id.0).iter_neighbors().map(CellId).collect()
     }
 }
 impl Deref for CellId {
@@ -336,6 +343,8 @@ pub fn generate_world<R: Rng + Clone>(
     // )?;
     Ok(WorldMap {
         scale,
+        height_scale:scale*0.25,
+        entity_scale:scale*0.025,
         voronoi: continents_voronoi,
         cell_height: cells_height,
         polygons: cell_polys,

@@ -478,7 +478,7 @@ fn startup(
             mat.clone()
         };
 
-        let scaled_height = height * scale * 0.25;
+        let scaled_height = height * world_map.height_scale;
         let mesh = build_extruded_with_caps(
             &vertices,
             scaled_height,
@@ -511,7 +511,6 @@ fn startup(
             0.0,
             scaled_height,
         ));
-        //let outline_mesh = meshes.add(outline_top_from_face(&vertices3, height * scale, 0.001));
         let outline_mesh = meshes.add(line);
 
         let mut cell = commands.spawn((
@@ -549,8 +548,11 @@ fn startup(
         if let Some(cell_id) = cell_id {
             pos = world_map.voronoi.cell(cell_id.0).site_position().to_vec2() * scale;
             let player_mat = materials.add(player.color);
-            let settlement_mesh = meshes.add(Cuboid::from_length(scale * 0.025));
-            let unit_mesh = meshes.add(Cylinder::new(scale * 0.025, scale * 0.025));
+            let settlement_mesh = meshes.add(Cuboid::from_length(world_map.entity_scale));
+            let unit_mesh = meshes.add(Cylinder::new(
+                world_map.entity_scale,
+                world_map.entity_scale,
+            ));
             let name = player
                 .settlement_names
                 .pop()
@@ -579,8 +581,8 @@ fn startup(
                     },
                 })],
             };
-            let height = *(world_map.cell_height.get(&cell_id).unwrap()) * (scale * 0.25);
-            let pos = pos.extend(height + (scale * 0.025)).xzy();
+            let height = *(world_map.cell_height.get(&cell_id).unwrap()) * (world_map.height_scale);
+            let pos = pos.extend(height + world_map.entity_scale).xzy();
             let camera_entity = commands
                 .spawn((
                     Camera3d { ..default() },
@@ -834,11 +836,12 @@ fn turn_start(
     mut commands: Commands,
     mut cameras: Query<(&mut Camera, &mut PanCam, Entity), Without<EguiContext>>,
     mut turn_start: MessageReader<TurnStart>,
-    mut units: Query<&mut Unit>,
+    mut units: Query<(&mut Unit, &Transform)>,
     mut settlements: Query<(&mut SettlementCenter, &Transform)>,
     mut selected: ResMut<Selection>,
     highlights: Query<Entity, With<CellHighlight>>,
     game_state: Res<GameState>,
+    world_map: Res<WorldMap>,
 ) {
     for turn in turn_start.read() {
         let player = game_state.players.get(&turn.player).unwrap();
@@ -859,7 +862,10 @@ fn turn_start(
             let mut highlight = commands.entity(entity);
             highlight.despawn();
         }
-        for mut unit in units.iter_mut().filter(|u| u.controller == turn.player) {
+        for (mut unit, _) in units
+            .iter_mut()
+            .filter(|(u, _)| u.controller == turn.player)
+        {
             unit.used_speed = 0.0;
         }
         for (mut settlement, transform) in settlements
@@ -871,17 +877,26 @@ fn turn_start(
                 match construction {
                     ConstructionJob::Unit(unit_constuction) => {
                         if unit_constuction.add_progress(production) {
-                            let mut unit = commands.spawn((
-                                unit_constuction.template.clone(),
-                                //MeshMaterial2d(materials.add(player.color)),
-                                Transform::from_xyz(
-                                    transform.translation.x,
-                                    transform.translation.y,
-                                    transform.translation.z,
-                                ),
-                            ));
-                            unit.observe(click_unit);
-                            settlement.construction = None;
+                            let cell = world_map
+                                .get_cell_for_position(transform.translation.xz())
+                                .unwrap();
+                            let neighbours = world_map.get_neighbours(cell);
+                            let neighbour = neighbours.iter().find(|n| {
+                                !units.iter().any(|(_, t)| {
+                                    world_map.get_cell_for_position(t.translation.xz()).unwrap()
+                                        != **n
+                                })
+                            });
+                            if let Some(cell) = neighbour {
+                                let pos = world_map.get_position_for_cell(*cell);
+                                let mut unit = commands.spawn((
+                                    unit_constuction.template.clone(),
+                                    //MeshMaterial2d(materials.add(player.color)),
+                                    Transform::from_translation(pos),
+                                ));
+                                unit.observe(click_unit);
+                                settlement.construction = None;
+                            }
                         }
                     }
                 }
@@ -938,10 +953,10 @@ struct TurnAction {
 }
 fn set_unit_next_cell(
     mut commands: Commands,
-    mut units: Query<(&mut Unit, Entity)>,
+    mut units: Query<(&mut Unit, Entity, &Transform)>,
     world_map: Res<WorldMap>,
 ) {
-    for (mut unit, entity) in units.iter_mut() {
+    for (mut unit, entity, transform) in units.iter_mut() {
         let mut a = commands.entity(entity);
         a.remove::<TurnAction>();
         if let Some(goal) = unit.goal {
@@ -972,6 +987,7 @@ fn set_unit_next_cell(
                                 world_map.get_position_for_cell(unit.current_cell);
                             let next_cell_pos = world_map.get_position_for_cell(nex_cell);
                             let distance = current_cell_pos.distance(next_cell_pos);
+                            info!("Current Cell: {current_cell_pos}, Next Cell: {next_cell_pos}");
                             if unit.used_speed + distance > unit.speed {
                                 unit.next_cell = None;
                                 unit.move_timer = None;
@@ -1007,31 +1023,16 @@ fn move_unit(
             let move_timer = unit.move_timer.as_mut().unwrap();
             move_timer.tick(time.delta());
 
-            let next_cell_pos = world_map
-                .voronoi
-                .cell(next_cell.0)
-                .site_position()
-                .to_vec2()
-                * world_map.scale;
-            let next_cell_height =
-                *world_map.cell_height.get(&next_cell).unwrap() * (world_map.scale * 0.025);
-            let next_cell_pos = next_cell_pos.extend(next_cell_height);
-
+            let next_cell_pos = world_map.get_position_for_cell(next_cell);
             if move_timer.is_finished() {
                 *transform = Transform::from_translation(next_cell_pos);
                 unit.current_cell = next_cell;
                 unit.next_cell = None;
+                info!("Unit Pos: {}", transform.translation);
             } else {
-                let current_cell_pos = world_map
-                    .voronoi
-                    .cell(current_cell)
-                    .site_position()
-                    .to_vec2()
-                    * world_map.scale;
-                let curent_cell_height =
-                    *world_map.cell_height.get(&CellId(current_cell)).unwrap() * (world_map.scale * 0.025);
-                let current_cell_pos = current_cell_pos.extend(curent_cell_height);
+                let current_cell_pos = world_map.get_position_for_cell(CellId(current_cell));
                 let new_pos = current_cell_pos.lerp(next_cell_pos, move_timer.fraction());
+
                 *transform = Transform::from_translation(new_pos);
             }
         }
