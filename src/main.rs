@@ -10,11 +10,14 @@ use bevy::{
     asset::RenderAssetUsages,
     camera::{Exposure, Viewport, visibility::RenderLayers},
     ecs::system::SystemState,
-    light::{AtmosphereEnvironmentMapLight, CascadeShadowConfigBuilder, NotShadowCaster, light_consts::lux},
+    light::{
+        AtmosphereEnvironmentMapLight, NotShadowCaster,
+        light_consts::lux,
+    },
     log::{BoxedLayer, LogPlugin, tracing_subscriber::Layer},
     math::bounding::Aabb2d,
     mesh::{Indices, PrimitiveTopology},
-    pbr::{Atmosphere, AtmosphereSettings},
+    pbr::Atmosphere,
     post_process::bloom::Bloom,
     prelude::*,
     render::render_resource::BlendState,
@@ -515,12 +518,12 @@ fn startup(
         ));
         cell.observe(click_cell).observe(over_cell);
     }
-// let cascade_shadow_config = CascadeShadowConfigBuilder {
-//         first_cascade_far_bound: 0.3,
-//         maximum_distance: 3.0*scale,
-//         ..default()
-//     }
-//     .build();
+    // let cascade_shadow_config = CascadeShadowConfigBuilder {
+    //         first_cascade_far_bound: 0.3,
+    //         maximum_distance: 3.0*scale,
+    //         ..default()
+    //     }
+    //     .build();
     commands.spawn((
         DirectionalLight {
             shadows_enabled: true,
@@ -557,6 +560,7 @@ fn startup(
                 controller: player.id,
                 production: 1.0,
                 construction: None,
+                cell: cell_id,
                 available_constructions: vec![ConstructionJob::Unit(UnitConstuction {
                     name: "Unit 1".to_string(),
                     cost: 2.0,
@@ -566,7 +570,7 @@ fn startup(
                         material: MeshMaterial3d(player_mat.clone()),
                         unit: Unit {
                             name: "Unit 1".to_string(),
-                            speed: 150.0,
+                            speed: 5.0,
                             used_speed: 0.0,
                             current_cell: cell_id,
                             next_cell: None,
@@ -846,8 +850,8 @@ fn turn_start(
     mut commands: Commands,
     mut cameras: Query<(&mut Camera, Entity, &mut RtsCameraControls), Without<EguiContext>>,
     mut turn_start: MessageReader<TurnStart>,
-    mut units: Query<(&mut Unit, &Transform)>,
-    mut settlements: Query<(&mut SettlementCenter, &Transform)>,
+    mut units: Query<&mut Unit>,
+    mut settlements: Query<&mut SettlementCenter>,
     mut selected: ResMut<Selection>,
     highlights: Query<Entity, With<CellHighlight>>,
     game_state: Res<GameState>,
@@ -872,31 +876,23 @@ fn turn_start(
             let mut highlight = commands.entity(entity);
             highlight.despawn();
         }
-        for (mut unit, _) in units
-            .iter_mut()
-            .filter(|(u, _)| u.controller == turn.player)
-        {
+        for mut unit in units.iter_mut().filter(|u| u.controller == turn.player) {
             unit.used_speed = 0.0;
         }
-        for (mut settlement, transform) in settlements
+        for mut settlement in settlements
             .iter_mut()
-            .filter(|s| s.0.controller == turn.player)
+            .filter(|s| s.controller == turn.player)
         {
             let production = settlement.production;
+            let cell = settlement.cell;
             if let Some(ref mut construction) = settlement.construction {
                 match construction {
                     ConstructionJob::Unit(unit_constuction) => {
                         if unit_constuction.add_progress(production) {
-                            let cell = world_map
-                                .get_cell_for_position(transform.translation.xz())
-                                .unwrap();
                             let neighbours = world_map.get_neighbours(cell);
-                            let neighbour = neighbours.iter().find(|n| {
-                                !units.iter().any(|(_, t)| {
-                                    world_map.get_cell_for_position(t.translation.xz()).unwrap()
-                                        != **n
-                                })
-                            });
+                            let neighbour = neighbours
+                                .iter()
+                                .find(|n| !units.iter().any(|u| u.current_cell == **n));
                             if let Some(cell) = neighbour {
                                 let pos = world_map.get_position_for_cell(*cell);
                                 let mut unit = commands.spawn((
@@ -906,6 +902,8 @@ fn turn_start(
                                 ));
                                 unit.observe(click_unit);
                                 settlement.construction = None;
+                            } else {
+                                info!("No space for unit!");
                             }
                         }
                     }
@@ -978,7 +976,6 @@ fn set_unit_next_cell(mut units: Query<&mut Unit>, world_map: Res<WorldMap>) {
                                 world_map.get_position_for_cell(unit.current_cell);
                             let next_cell_pos = world_map.get_position_for_cell(nex_cell);
                             let distance = current_cell_pos.distance(next_cell_pos);
-                            info!("Current Cell: {current_cell_pos}, Next Cell: {next_cell_pos}");
                             if unit.used_speed + distance > unit.speed {
                                 unit.next_cell = None;
                                 unit.move_timer = None;
@@ -987,7 +984,6 @@ fn set_unit_next_cell(mut units: Query<&mut Unit>, world_map: Res<WorldMap>) {
                             unit.used_speed += distance;
                             unit.next_cell = Some(nex_cell);
                             unit.move_timer = Some(Timer::from_seconds(5.0, TimerMode::Once));
-                            info!("Set unit next_cell");
                         }
                     }
                     None => unit.goal = None,
@@ -1016,7 +1012,6 @@ fn move_unit(
                 *transform = Transform::from_translation(next_cell_pos);
                 unit.current_cell = next_cell;
                 unit.next_cell = None;
-                info!("Unit Pos: {}", transform.translation);
             } else {
                 let current_cell_pos = world_map.get_position_for_cell(CellId(current_cell));
                 let new_pos = current_cell_pos.lerp(next_cell_pos, move_timer.fraction());
@@ -1132,6 +1127,7 @@ struct Unit {
 
 #[derive(Component)]
 struct SettlementCenter {
+    cell: CellId,
     controller: PlayerId,
     construction: Option<ConstructionJob>,
     production: f32,

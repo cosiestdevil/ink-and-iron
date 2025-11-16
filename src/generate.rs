@@ -30,9 +30,11 @@ pub struct WorldMap {
     pub entity_scale: f32,
     voronoi: Voronoi,
     cell_height: HashMap<CellId, f32>,
+    #[allow(unused)]
     polygons: HashMap<CellId, geo::Polygon>,
 }
 impl WorldMap {
+    #[allow(unused)]
     pub fn get_cell_for_position(&self, pos: Vec2) -> Option<CellId> {
         for (cell_id, poly) in self.polygons.iter() {
             if poly.contains(&geo::point!(x:(pos.x/self.scale) as f64,y:(pos.y/self.scale) as f64))
