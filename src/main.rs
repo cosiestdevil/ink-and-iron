@@ -732,7 +732,8 @@ fn ui_example_system(
                             }
                         }
                         ui.separator();
-                        ui.label("v1.2.3");
+                        let version = option_env!("VERSION_TAG").unwrap_or("Custom");
+                        ui.label(version);
                     },
                 );
             });
