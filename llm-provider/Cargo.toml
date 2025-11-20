@@ -7,7 +7,7 @@ publish = false
 
 
 [dependencies]
-llm-api = {path = "../llm-api"}
+llm-api = {workspace = true}
 kalosm-llama = { version = "0.4.0", default-features = false, git = "https://github.com/floneum/floneum" }
 kalosm-language = { version = "0.4.0", default-features = false,features = ["llama"], git = "https://github.com/floneum/floneum" }
 kalosm-model-types ={ version = "0.4.0", default-features = false, git = "https://github.com/floneum/floneum" }

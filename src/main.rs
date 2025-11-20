@@ -4,7 +4,7 @@ use std::{collections::HashMap, sync::OnceLock, time::Duration};
 use crate::{
     generate::{CellId, WorldMap},
     llm::SettlementNameCtx,
-    pathfinding::ToVec2,
+    generate::ToVec2,
 };
 use bevy::{
     asset::RenderAssetUsages,
@@ -35,13 +35,10 @@ use bevy_rts_camera::{Ground, RtsCamera, RtsCameraControls, RtsCameraPlugin};
 use bevy_tokio_tasks::TokioTasksRuntime;
 use clap::Parser;
 use colorgrad::Gradient;
-use glam::Vec2;
 use num::Num;
 use rand::{Rng, SeedableRng, distr::Uniform};
 use rand_chacha::ChaCha20Rng;
-//use bevy_top_down_camera::*;
 mod generate;
-mod helpers;
 mod llm;
 mod pathfinding;
 
@@ -101,7 +98,7 @@ fn main() -> anyhow::Result<()> {
         }
         None => ChaCha20Rng::from_os_rng(),
     };
-    let a = generate::generate_world((&args).into(), &mut rng)?;
+    let a = WorldMap(generate::generate_world((&args).into(), &mut rng)?);
     let seed = rng.get_seed();
     let num = num::BigUint::from_bytes_le(&seed);
     let seed = num.to_str_radix(36);
