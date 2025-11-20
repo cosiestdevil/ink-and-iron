@@ -1,3 +1,4 @@
+#![windows_subsystem = "windows"]
 #![allow(clippy::too_many_arguments)]
 use std::{collections::HashMap, path::Path, sync::OnceLock, time::Duration};
 
