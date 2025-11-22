@@ -10,7 +10,6 @@ use crate::{
 use bevy::{
     asset::RenderAssetUsages,
     camera::Exposure,
-    ecs::system::SystemState,
     input_focus::InputFocus,
     light::{AtmosphereEnvironmentMapLight, NotShadowCaster, light_consts::lux},
     log::LogPlugin,
