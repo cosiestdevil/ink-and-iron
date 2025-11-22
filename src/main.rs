@@ -1,6 +1,6 @@
 #![windows_subsystem = "windows"]
 #![allow(clippy::too_many_arguments)]
-use std::{collections::HashMap, path::Path, sync::OnceLock, time::Duration};
+use std::{collections::HashMap, path::Path, time::Duration};
 
 use crate::{
     generate::ToVec2,
@@ -12,7 +12,7 @@ use bevy::{
     camera::{Exposure, Viewport, visibility::RenderLayers},
     ecs::system::SystemState,
     light::{AtmosphereEnvironmentMapLight, NotShadowCaster, light_consts::lux},
-    log::{BoxedLayer, LogPlugin, tracing_subscriber::Layer},
+    log::LogPlugin,
     math::bounding::Aabb2d,
     mesh::{Indices, PrimitiveTopology},
     pbr::Atmosphere,
