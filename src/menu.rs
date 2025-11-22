@@ -74,14 +74,12 @@ fn main_menu(
 
                         if ui.button("New Game").clicked() {
                             next_state.set(AppState::Generating);
-                            info!("New Game clicked");
                         }
 
                         ui.add_space(4.0);
 
                         if ui.button("Settings").clicked() {
                             next_menu_state.set(MenuState::Settings);
-                            info!("Settings clicked");
                         }
 
                         ui.add_space(4.0);
@@ -128,6 +126,11 @@ fn settings_menu(
                         // Apply to the actual audio channel
                         music.set_volume(((1.0 - audio_settings.music_volume) * -40.) - 10.);
                     }
+                    ui.add_space(4.0);
+
+                        if ui.button("Return").clicked() {
+                            next_menu_state.set(MenuState::Main);
+                        }
                 });
         });
 }
