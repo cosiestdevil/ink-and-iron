@@ -100,6 +100,12 @@ jobs:
 
           "zip_path=$zipPath" >> $env:GITHUB_OUTPUT
           "zip_name=$zipName" >> $env:GITHUB_OUTPUT
+      - name: Generate a changelog
+        uses: orhun/git-cliff-action@v4
+        id: git-cliff
+        with:
+          config: cliff.toml
+          args: --latest --strip header
       - name: Upload asset & create/update release
         uses: svenstaro/upload-release-action@v2
         with:
@@ -111,5 +117,6 @@ jobs:
           body: |
             Automated build for ${{ steps.version.outputs.name }}.
             Channel: ${{ steps.version.outputs.channel }}.
+            ${{steps.git-cliff.outputs.content}}
           prerelease: ${{ steps.version.outputs.prerelease }}
           overwrite: true
