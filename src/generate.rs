@@ -4,10 +4,12 @@ use bevy::{
 };
 use bevy_easings::Ease;
 use bevy_tokio_tasks::TokioTasksRuntime;
+use llm_api::SettlementNameCtx;
+use rand::Rng;
 use std::ops::Deref;
 pub use world_generation::*;
 
-use crate::AppState;
+use crate::{AppState, GameState, Random, llm};
 #[derive(Resource, Default)]
 pub struct WorldMap(pub Option<world_generation::WorldMap>);
 
@@ -43,12 +45,78 @@ pub struct WorldPlugin;
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<WorldMap>();
-        app.add_systems(OnEnter(AppState::Generating), gen_world);
-        app.add_systems(OnExit(AppState::Generating), remove_marked::<GenerationScreen>);
-        app.add_systems(OnEnter(AppState::Generated), generated_screen);
-        app.add_systems(OnExit(AppState::Generated), remove_marked::<GeneratedScreen>);
-        app.add_systems(Update, button_system.run_if(in_state(AppState::Generated)));
+        app.add_computed_state::<GenerationPhase>();
+        app.add_sub_state::<GenerationState>();
+        app.add_systems(OnEnter(GenerationState::World), gen_world);
+        app.add_systems(OnEnter(GenerationState::Settlements), generate_settlement_name);
+        app.add_systems(OnEnter(GenerationState::Finshed),(remove_marked::<GenerationScreen>, generated_screen));
+        app.add_systems(OnExit(GenerationState::Finshed), remove_marked::<GeneratedScreen>);
+        app.add_systems(Update, button_system.run_if(in_state(GenerationState::Finshed)));
     }
+}
+fn generate_settlement_name(
+    mut rng: ResMut<Random<crate::RandomRng>>,
+    runtime: ResMut<TokioTasksRuntime>,
+    game_state: Res<GameState>,
+) {
+    let temp = rng.0.as_mut().unwrap().random_range(0.3..0.5);
+    for player in game_state.players.values() {
+        let civ_name = player.settlement_context.civilisation_name.clone();
+        let player_id = player.id;
+        runtime.spawn_background_task(move |mut ctx| async move {
+            if let Ok(names) = llm::settlement_names(
+                SettlementNameCtx {
+                    civilisation_name: civ_name,
+                },
+                temp,
+            )
+            .await
+            {
+                ctx.run_on_main_thread(move |ctx| {
+                    let world = ctx.world;
+                    let (mut game_state, mut next_state) = {
+                        let mut system_state = SystemState::<(
+                            ResMut<GameState>,
+                            ResMut<NextState<GenerationState>>,
+                        )>::new(world);
+                        system_state.get_mut(world)
+                    };
+                    let player = game_state.players.get_mut(&player_id).unwrap();
+                    player.settlement_names = names;
+                    if game_state
+                        .players
+                        .values()
+                        .all(|p| !p.settlement_names.is_empty())
+                    {
+                        next_state.set(GenerationState::Finshed);
+                    }
+                })
+                .await;
+            }
+        });
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+struct GenerationPhase;
+impl ComputedStates for GenerationPhase {
+    type SourceStates = Option<AppState>;
+
+    fn compute(sources: Self::SourceStates) -> Option<Self> {
+        if let Some(AppState::Generating) = sources {
+            Some(GenerationPhase)
+        } else {
+            None
+        }
+    }
+}
+#[derive(SubStates, Clone, PartialEq, Eq, Hash, Debug, Default)]
+#[source(GenerationPhase = GenerationPhase)]
+enum GenerationState {
+    #[default]
+    World,
+    Settlements,
+    Finshed,
 }
 #[derive(Component)]
 struct GenerationScreen;
@@ -118,12 +186,12 @@ fn gen_world(
             let world = ctx.world;
             let (mut world_map, mut next_state) = {
                 let mut system_state =
-                    SystemState::<(ResMut<WorldMap>, ResMut<NextState<AppState>>)>::new(world);
+                    SystemState::<(ResMut<WorldMap>, ResMut<NextState<GenerationState>>)>::new(world);
                 system_state.get_mut(world)
             };
             world_map.0 = Some(generated_world);
             info!("World generated.");
-            next_state.set(AppState::Generated);
+            next_state.set(GenerationState::Settlements);
         })
         .await;
     });

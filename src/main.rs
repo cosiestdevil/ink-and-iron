@@ -65,7 +65,6 @@ pub(crate) enum AppState {
     Loading,
     Menu,
     Generating,
-    Generated,
     InGame,
 }
 mod logs;
@@ -110,13 +109,13 @@ fn main() -> anyhow::Result<()> {
         .add_systems(
             Startup,
             (
-                generate_settlement_name,
                 start_background_audio,
                 startup_screens,
                 setup_rng,
                 archive_old_logs,
             ),
         )
+        .add_systems(Update,loaded.run_if(in_state(AppState::Loading)))
         .add_systems(OnExit(AppState::Loading), remove_startup_screen)
         .add_systems(OnEnter(AppState::InGame), startup)
         .add_systems(
@@ -140,6 +139,14 @@ fn main() -> anyhow::Result<()> {
         )
         .run();
     Ok(())
+}
+
+fn loaded(mut next_state: ResMut<NextState<AppState>>,mut timer: Local<Option<Timer>>,time: Res<Time>) {
+    let timer = timer.get_or_insert(Timer::new(Duration::from_secs(5), TimerMode::Once));
+    timer.tick(time.delta());
+    if timer.is_finished(){
+        next_state.set(AppState::Menu);
+    }
 }
 #[derive(Resource)]
 struct Music;
@@ -264,48 +271,6 @@ fn deselect(
             let mut highlight = commands.entity(entity);
             highlight.despawn();
         }
-    }
-}
-fn generate_settlement_name(
-    mut rng: ResMut<Random<ChaCha20Rng>>,
-    runtime: ResMut<TokioTasksRuntime>,
-    game_state: Res<GameState>,
-) {
-    let temp = rng.0.as_mut().unwrap().random_range(0.3..0.5);
-    for player in game_state.players.values() {
-        let civ_name = player.settlement_context.civilisation_name.clone();
-        let player_id = player.id;
-        runtime.spawn_background_task(move |mut ctx| async move {
-            if let Ok(names) = llm::settlement_names(
-                SettlementNameCtx {
-                    civilisation_name: civ_name,
-                },
-                temp,
-            )
-            .await
-            {
-                ctx.run_on_main_thread(move |ctx| {
-                    let world = ctx.world;
-                    let (mut game_state, mut next_state) = {
-                        let mut system_state = SystemState::<(
-                            ResMut<GameState>,
-                            ResMut<NextState<AppState>>,
-                        )>::new(world);
-                        system_state.get_mut(world)
-                    };
-                    let player = game_state.players.get_mut(&player_id).unwrap();
-                    player.settlement_names = names;
-                    if game_state
-                        .players
-                        .values()
-                        .all(|p| !p.settlement_names.is_empty())
-                    {
-                        next_state.set(AppState::Menu);
-                    }
-                })
-                .await;
-            }
-        });
     }
 }
 fn archive_old_logs(runtime: ResMut<TokioTasksRuntime>) {
