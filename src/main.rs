@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"]
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![allow(clippy::too_many_arguments)]
 use std::{collections::HashMap, path::Path, time::Duration};
 
@@ -8,16 +8,7 @@ use crate::{
     llm::SettlementNameCtx,
 };
 use bevy::{
-    asset::RenderAssetUsages,
-    camera::{Exposure},
-    ecs::system::SystemState,
-    light::{AtmosphereEnvironmentMapLight, NotShadowCaster, light_consts::lux},
-    log::LogPlugin,
-    math::bounding::Aabb2d,
-    mesh::{Indices, PrimitiveTopology},
-    pbr::Atmosphere,
-    post_process::bloom::Bloom,
-    prelude::*,
+    asset::RenderAssetUsages, camera::Exposure, ecs::system::SystemState, input_focus::InputFocus, light::{AtmosphereEnvironmentMapLight, NotShadowCaster, light_consts::lux}, log::LogPlugin, math::bounding::Aabb2d, mesh::{Indices, PrimitiveTopology}, pbr::Atmosphere, post_process::bloom::Bloom, prelude::*
 };
 use bevy_easings::{Ease, EasingsPlugin};
 use bevy_egui::{
@@ -62,30 +53,14 @@ struct Args {
 pub(crate) enum AppState {
     #[default]
     Loading,
+    Menu,
+    Generating,
+    Generated,
     InGame,
 }
 mod logs;
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
-    logs::archive_old_logs(Path::new("logs"))?;
-    let mut rng = match args.seed {
-        Some(ref s) => {
-            let num = num::BigUint::from_str_radix(s, 36)?;
-            let seed_bytes = num.to_bytes_le();
-            let mut seed_arr = [0u8; 32];
-            for (i, b) in seed_bytes.iter().enumerate().take(32) {
-                seed_arr[i] = *b;
-            }
-            ChaCha20Rng::from_seed(seed_arr)
-        }
-        None => ChaCha20Rng::from_os_rng(),
-    };
-    let a = WorldMap(generate::generate_world((&args).into(), &mut rng)?);
-    let seed = rng.get_seed();
-    let num = num::BigUint::from_bytes_le(&seed);
-    let seed = num.to_str_radix(36);
-    println!("Seed: {}", seed);
-
     App::new()
         .add_plugins((
             DefaultPlugins
@@ -109,18 +84,23 @@ fn main() -> anyhow::Result<()> {
         ))
         .add_plugins(bevy_tokio_tasks::TokioTasksPlugin::default())
         .add_plugins(crate::ui::UIPlugin)
+        .add_plugins(crate::generate::WorldPlugin)
         .add_message::<TurnStart>()
         .init_state::<AppState>()
+        .init_resource::<InputFocus>()
+        .insert_resource(Seed(args.seed.clone()))
         .insert_resource(GameState::new(2))
-        .insert_resource(Random(rng))
+        .insert_resource::<Random::<RandomRng>>(Random(None))
         .insert_resource(Selection::None)
-        .insert_resource(a)
+        .insert_resource::<generate::WorldGenerationParams>((&args).into())
         .add_systems(
             Startup,
             (
                 generate_settlement_name,
                 start_background_audio,
                 startup_screens,
+                setup_rng,
+                archive_old_logs,
             ),
         )
         .add_systems(OnExit(AppState::Loading), remove_startup_screen)
@@ -150,6 +130,28 @@ fn main() -> anyhow::Result<()> {
 
 #[derive(Component)]
 struct StartupScreen;
+
+#[derive(Resource)]
+struct Seed(Option<String>);
+fn setup_rng(mut random: ResMut<Random<ChaCha20Rng>>, seed: Res<Seed>) {
+    let rng = match seed.0.as_ref() {
+        Some(s) => {
+            let num = num::BigUint::from_str_radix(s, 36).unwrap();
+            let seed_bytes = num.to_bytes_le();
+            let mut seed_arr = [0u8; 32];
+            for (i, b) in seed_bytes.iter().enumerate().take(32) {
+                seed_arr[i] = *b;
+            }
+            ChaCha20Rng::from_seed(seed_arr)
+        }
+        None => ChaCha20Rng::from_os_rng(),
+    };
+    let seed = rng.get_seed();
+    let num = num::BigUint::from_bytes_le(&seed);
+    let seed = num.to_str_radix(36);
+    info!("Seed: {}", seed);
+    random.0 = Some(rng);
+}
 fn startup_screens(mut commands: Commands) {
     commands.spawn((
         StartupScreen,
@@ -237,7 +239,7 @@ fn generate_settlement_name(
     runtime: ResMut<TokioTasksRuntime>,
     game_state: Res<GameState>,
 ) {
-    let temp = rng.0.random_range(0.3..0.5);
+    let temp = rng.0.as_mut().unwrap().random_range(0.3..0.5);
     for player in game_state.players.values() {
         let civ_name = player.settlement_context.civilisation_name.clone();
         let player_id = player.id;
@@ -266,7 +268,7 @@ fn generate_settlement_name(
                         .values()
                         .all(|p| !p.settlement_names.is_empty())
                     {
-                        next_state.set(AppState::InGame);
+                        next_state.set(AppState::Generating);
                     }
                 })
                 .await;
@@ -274,8 +276,15 @@ fn generate_settlement_name(
         });
     }
 }
+fn archive_old_logs(runtime: ResMut<TokioTasksRuntime>,){
+    runtime.spawn_background_task(move |_| async move {
+        logs::archive_old_logs(Path::new("logs")).unwrap();
+    });
+    
+}
+pub type RandomRng = ChaCha20Rng;
 #[derive(Resource)]
-struct Random<R: Rng>(R);
+pub struct Random<R: Rng>(Option<R>);
 mod ui;
 fn smooth01(t: f32) -> f32 {
     // standard smoothstep from 0..1
@@ -490,7 +499,7 @@ fn startup(
     for player in game_state.players.values_mut() {
         let valid_settlment_cells = world_map.get_valid_settlement_cells();
         let valid_settlment_cells_i = random
-            .0
+            .0.as_mut().unwrap()
             .sample(Uniform::new(0, valid_settlment_cells.len()).unwrap());
         let cell_id = valid_settlment_cells.get(valid_settlment_cells_i).copied();
         // let pos = random
