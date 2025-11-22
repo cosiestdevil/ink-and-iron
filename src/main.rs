@@ -288,40 +288,47 @@ fn smooth01(t: f32) -> f32 {
     // standard smoothstep from 0..1
     t * t * (3.0 - 2.0 * t)
 }
-fn move_sun(mut light: Query<(&mut Transform, &mut DirectionalLight)>, time: Res<Time>) {
+fn move_sun(
+    mut light: Query<(&mut Transform, &mut DirectionalLight)>,
+    mut time_of_day: Local<Option<Timer>>,
+    time: Res<Time>,
+) {
+    let timer =
+        time_of_day.get_or_insert(Timer::new(Duration::from_secs(300), TimerMode::Repeating));
+    timer.tick(time.delta());
     let noon = vec3(0.0, 200.0, -200.0);
-    let day_t = (time.elapsed_secs() % 300.0) / 300.0;
+    let day_t = timer.fraction();
     let sunrise = vec3(-200.0, 0.0, 0.0);
     let sunset = vec3(200.0, 0.0, 0.0);
     let midnight = vec3(0.0, -200.0, 200.0);
-    let l0 = 0.165; // midnight -> sunrise
-    let l1 = 0.33; // sunrise -> noon
-    let l2 = 0.33; // noon -> sunset
+    let l0 = 0.33; //  noon -> sunset
+    let l1 = 0.165; // sunset -> midnight
+    let l2 = 0.165; // midnight -> sunrise
     // ensure they add up to 1.0 exactly
-    let l3 = 1.0 - (l0 + l1 + l2); // ~0.175, sunset -> midnight
+    let l3 = 1.0 - (l0 + l1 + l2); // ~0.33,sunrise -> noon 
 
     let t = day_t.fract(); // wrap into 0..1
 
     let pos = if t < l0 {
-        // midnight → sunrise
+        // noon → sunset
         let u = t / l0;
         let s = smooth01(u);
-        midnight.lerp(sunrise, s)
+        noon.lerp(sunset, s)
     } else if t < l0 + l1 {
-        // sunrise → noon
+        // sunset → midnight
         let u = (t - l0) / l1;
         let s = smooth01(u);
-        sunrise.lerp(noon, s)
+        sunset.lerp(midnight, s)
     } else if t < l0 + l1 + l2 {
-        // noon → sunset
+        // midnight → sunrise
         let u = (t - (l0 + l1)) / l2;
         let s = smooth01(u);
-        noon.lerp(sunset, s)
+        midnight.lerp(sunrise, s)
     } else {
-        // sunset → midnight
+        // sunrise → noon
         let u = (t - (l0 + l1 + l2)) / l3;
         let s = smooth01(u);
-        sunset.lerp(midnight, s)
+        sunrise.lerp(noon, s)
     };
     let (mut transform, mut light) = light.single_mut().unwrap();
     *transform = Transform::from_translation(pos).looking_at(vec3(0.0, 0.0, 0.0), Vec3::Y);
