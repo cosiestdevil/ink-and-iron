@@ -8,7 +8,17 @@ use crate::{
     llm::SettlementNameCtx,
 };
 use bevy::{
-    asset::RenderAssetUsages, camera::Exposure, ecs::system::SystemState, input_focus::InputFocus, light::{AtmosphereEnvironmentMapLight, NotShadowCaster, light_consts::lux}, log::LogPlugin, math::bounding::Aabb2d, mesh::{Indices, PrimitiveTopology}, pbr::Atmosphere, post_process::bloom::Bloom, prelude::*
+    asset::RenderAssetUsages,
+    camera::Exposure,
+    ecs::system::SystemState,
+    input_focus::InputFocus,
+    light::{AtmosphereEnvironmentMapLight, NotShadowCaster, light_consts::lux},
+    log::LogPlugin,
+    math::bounding::Aabb2d,
+    mesh::{Indices, PrimitiveTopology},
+    pbr::Atmosphere,
+    post_process::bloom::Bloom,
+    prelude::*,
 };
 use bevy_easings::{Ease, EasingsPlugin};
 use bevy_egui::{
@@ -83,6 +93,7 @@ fn main() -> anyhow::Result<()> {
             EasingsPlugin::default(),
             RtsCameraPlugin,
         ))
+        .add_audio_channel::<Music>()
         .add_plugins(bevy_tokio_tasks::TokioTasksPlugin::default())
         .add_plugins(crate::ui::UIPlugin)
         .add_plugins(crate::generate::WorldPlugin)
@@ -90,9 +101,10 @@ fn main() -> anyhow::Result<()> {
         .add_message::<TurnStart>()
         .init_state::<AppState>()
         .init_resource::<InputFocus>()
+        .insert_resource(AudioSettings::default())
         .insert_resource(Seed(args.seed.clone()))
         .insert_resource(GameState::new(2))
-        .insert_resource::<Random::<RandomRng>>(Random(None))
+        .insert_resource::<Random<RandomRng>>(Random(None))
         .insert_resource(Selection::None)
         .insert_resource::<generate::WorldGenerationParams>((&args).into())
         .add_systems(
@@ -129,12 +141,26 @@ fn main() -> anyhow::Result<()> {
         .run();
     Ok(())
 }
-
+#[derive(Resource)]
+struct Music;
 #[derive(Component)]
 struct StartupScreen;
 
 #[derive(Resource)]
 struct Seed(Option<String>);
+
+#[derive(Resource)]
+struct AudioSettings {
+    music_volume: f32,
+}
+impl Default for AudioSettings {
+    fn default() -> Self {
+        AudioSettings {
+            music_volume: 1.0,
+        }
+    }
+}
+
 fn setup_rng(mut random: ResMut<Random<ChaCha20Rng>>, seed: Res<Seed>) {
     let rng = match seed.0.as_ref() {
         Some(s) => {
@@ -212,14 +238,18 @@ fn remove_startup_screen(mut commands: Commands, screens: Query<Entity, With<Sta
         screen.despawn();
     }
 }
-fn start_background_audio(asset_server: Res<AssetServer>, audio: Res<Audio>) {
+fn start_background_audio(
+    asset_server: Res<AssetServer>,
+    audio: Res<AudioChannel<Music>>,
+    audio_settings: Res<AudioSettings>,
+) {
     audio
         .play(asset_server.load("sounds/Pixel Kingdom.wav"))
         .fade_in(AudioTween::new(
             Duration::from_secs(2),
             AudioEasing::InPowi(2),
         ))
-        .with_volume(-20.)
+        .with_volume(((1.0 - audio_settings.music_volume) * -40.) - 10.)
         .looped();
 }
 fn deselect(
@@ -278,11 +308,10 @@ fn generate_settlement_name(
         });
     }
 }
-fn archive_old_logs(runtime: ResMut<TokioTasksRuntime>,){
+fn archive_old_logs(runtime: ResMut<TokioTasksRuntime>) {
     runtime.spawn_background_task(move |_| async move {
         logs::archive_old_logs(Path::new("logs")).unwrap();
     });
-    
 }
 pub type RandomRng = ChaCha20Rng;
 #[derive(Resource)]
@@ -501,7 +530,9 @@ fn startup(
     for player in game_state.players.values_mut() {
         let valid_settlment_cells = world_map.get_valid_settlement_cells();
         let valid_settlment_cells_i = random
-            .0.as_mut().unwrap()
+            .0
+            .as_mut()
+            .unwrap()
             .sample(Uniform::new(0, valid_settlment_cells.len()).unwrap());
         let cell_id = valid_settlment_cells.get(valid_settlment_cells_i).copied();
         // let pos = random
