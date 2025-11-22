@@ -115,7 +115,7 @@ fn main() -> anyhow::Result<()> {
                 archive_old_logs,
             ),
         )
-        .add_systems(Update,loaded.run_if(in_state(AppState::Loading)))
+        .add_systems(Update, loaded.run_if(in_state(AppState::Loading)))
         .add_systems(OnExit(AppState::Loading), remove_startup_screen)
         .add_systems(OnEnter(AppState::InGame), startup)
         .add_systems(
@@ -141,10 +141,14 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn loaded(mut next_state: ResMut<NextState<AppState>>,mut timer: Local<Option<Timer>>,time: Res<Time>) {
+fn loaded(
+    mut next_state: ResMut<NextState<AppState>>,
+    mut timer: Local<Option<Timer>>,
+    time: Res<Time>,
+) {
     let timer = timer.get_or_insert(Timer::new(Duration::from_secs(5), TimerMode::Once));
     timer.tick(time.delta());
-    if timer.is_finished(){
+    if timer.is_finished() {
         next_state.set(AppState::Menu);
     }
 }
@@ -162,9 +166,7 @@ struct AudioSettings {
 }
 impl Default for AudioSettings {
     fn default() -> Self {
-        AudioSettings {
-            music_volume: 1.0,
-        }
+        AudioSettings { music_volume: 1.0 }
     }
 }
 
