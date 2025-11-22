@@ -59,6 +59,7 @@ pub(crate) enum AppState {
     InGame,
 }
 mod logs;
+mod menu;
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     App::new()
@@ -85,6 +86,7 @@ fn main() -> anyhow::Result<()> {
         .add_plugins(bevy_tokio_tasks::TokioTasksPlugin::default())
         .add_plugins(crate::ui::UIPlugin)
         .add_plugins(crate::generate::WorldPlugin)
+        .add_plugins(crate::menu::MenuPlugin)
         .add_message::<TurnStart>()
         .init_state::<AppState>()
         .init_resource::<InputFocus>()
@@ -268,7 +270,7 @@ fn generate_settlement_name(
                         .values()
                         .all(|p| !p.settlement_names.is_empty())
                     {
-                        next_state.set(AppState::Generating);
+                        next_state.set(AppState::Menu);
                     }
                 })
                 .await;
