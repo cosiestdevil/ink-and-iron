@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_egui::{
     EguiContexts, EguiPrimaryContextPass,
-    egui::{self, Align2, Margin, epaint},
+    egui::{self, Align2, Margin},
 };
 use bevy_kira_audio::{AudioChannel, AudioControl};
 

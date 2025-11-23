@@ -3,18 +3,15 @@
 use std::{collections::HashMap, path::Path, time::Duration};
 
 use crate::{
-    generate::ToVec2,
     generate::{CellId, WorldMap},
     llm::SettlementNameCtx,
 };
 use bevy::{
-    asset::RenderAssetUsages,
     camera::Exposure,
     input_focus::InputFocus,
-    light::{AtmosphereEnvironmentMapLight, NotShadowCaster, light_consts::lux},
+    light::AtmosphereEnvironmentMapLight,
     log::LogPlugin,
     math::bounding::Aabb2d,
-    mesh::{Indices, PrimitiveTopology},
     pbr::Atmosphere,
     post_process::bloom::Bloom,
     prelude::*,
@@ -26,7 +23,7 @@ use bevy_egui::{
 };
 use bevy_kira_audio::prelude::*;
 use bevy_prototype_lyon::plugin::ShapePlugin;
-use bevy_rts_camera::{Ground, RtsCamera, RtsCameraControls, RtsCameraPlugin};
+use bevy_rts_camera::{RtsCamera, RtsCameraControls, RtsCameraPlugin};
 use bevy_tokio_tasks::TokioTasksRuntime;
 use clap::Parser;
 use colorgrad::Gradient;
@@ -358,7 +355,6 @@ fn startup(
     mut game_state: ResMut<GameState>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut random: ResMut<Random<ChaCha20Rng>>,
-    asset_server: Res<AssetServer>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let scale = world_map.scale;
