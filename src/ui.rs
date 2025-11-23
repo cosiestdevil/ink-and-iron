@@ -113,6 +113,7 @@ fn ui_example_system(
                         let unit = units.get_mut(entity).unwrap();
                         ui.label(unit.name.clone());
                         ui.label(format!("Speed: {}/{}", unit.used_speed, unit.speed));
+                        ui.label(format!("Health: {:.0}/{:.0}", unit.health.ceil(), unit.max_health.ceil()));
                     }
                     Selection::Settlement(_entity) => {}
                 }

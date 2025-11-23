@@ -400,6 +400,8 @@ fn startup(
                         material: MeshMaterial3d(player_mat.clone()),
                         unit: Unit {
                             name: "Unit 1".to_string(),
+                            max_health: 10.0,
+                            health: 10.0,
                             speed: 5.0,
                             used_speed: 0.0,
                             current_cell: cell_id,
@@ -718,6 +720,8 @@ enum Selection {
 #[derive(Component, Clone)]
 struct Unit {
     name: String,
+    max_health: f32,
+    health: f32,
     controller: PlayerId,
     speed: f32,
     used_speed: f32,
