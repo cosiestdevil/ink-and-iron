@@ -661,37 +661,6 @@ pub fn build_extruded_with_caps(
 
     mesh
 }
-pub fn outline_top_from_face(bottom_face: &[(Vec3, Vec2)], height: f32, y_offset: f32) -> Mesh {
-    assert!(
-        bottom_face.len() >= 3,
-        "Need at least 3 vertices for a polygon"
-    );
-
-    let n = bottom_face.len();
-    let mut positions: Vec<[f32; 3]> = Vec::with_capacity(n);
-    let mut indices: Vec<u32> = Vec::with_capacity(n * 2);
-
-    // Use the average Y from the bottom face (in case it's not exactly uniform)
-    let base_y = bottom_face.iter().map(|(v, _)| v.y).sum::<f32>() / n as f32;
-    let top_y = base_y + height + y_offset;
-
-    // Positions: vertices of the top ring (same x,z as the prism top)
-    for (v, _) in bottom_face.iter() {
-        positions.push([v.x, top_y, v.z]);
-    }
-
-    // Edges: connect each vertex to the next, and last to first
-    for i in 0..n {
-        let next = (i + 1) % n;
-        indices.push(i as u32);
-        indices.push(next as u32);
-    }
-
-    let mut mesh = Mesh::new(PrimitiveTopology::LineList, RenderAssetUsages::all());
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_indices(Indices::U32(indices));
-    mesh
-}
 fn extrude_polygon_xz_to_polyline_vertices(polygon_xz: &[Vec2], y0: f32, y1: f32) -> Vec<Vec3> {
     let n = polygon_xz.len();
     if n == 0 {
