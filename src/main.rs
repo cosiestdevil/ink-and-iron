@@ -7,13 +7,8 @@ use crate::{
     llm::SettlementNameCtx,
 };
 use bevy::{
-    camera::Exposure,
-    input_focus::InputFocus,
-    light::AtmosphereEnvironmentMapLight,
-    log::LogPlugin,
-    math::bounding::Aabb2d,
-    pbr::Atmosphere,
-    post_process::bloom::Bloom,
+    camera::Exposure, input_focus::InputFocus, light::AtmosphereEnvironmentMapLight,
+    log::LogPlugin, math::bounding::Aabb2d, pbr::Atmosphere, post_process::bloom::Bloom,
     prelude::*,
 };
 use bevy_easings::{Ease, EasingsPlugin};
@@ -22,6 +17,7 @@ use bevy_egui::{
     egui::{self, Response, Ui},
 };
 use bevy_kira_audio::prelude::*;
+use bevy_persistent::{Persistent, StorageFormat};
 use bevy_prototype_lyon::plugin::ShapePlugin;
 use bevy_rts_camera::{RtsCamera, RtsCameraControls, RtsCameraPlugin};
 use bevy_tokio_tasks::TokioTasksRuntime;
@@ -96,7 +92,6 @@ fn main() -> anyhow::Result<()> {
         .add_message::<TurnStart>()
         .init_state::<AppState>()
         .init_resource::<InputFocus>()
-        .insert_resource(AudioSettings::default())
         .insert_resource(Seed(args.seed.clone()))
         .insert_resource(GameState::new(2))
         .insert_resource::<Random<RandomRng>>(Random(None))
@@ -105,11 +100,15 @@ fn main() -> anyhow::Result<()> {
         .add_systems(
             Startup,
             (
-                start_background_audio,
+                load_settings,
                 startup_screens,
                 setup_rng,
                 archive_old_logs,
             ),
+        )
+        .add_systems(
+            Update,
+            start_background_audio.run_if(resource_added::<Persistent<AudioSettings>>),
         )
         .add_systems(Update, loaded.run_if(in_state(AppState::Loading)))
         .add_systems(OnExit(AppState::Loading), remove_startup_screen)
@@ -136,15 +135,26 @@ fn main() -> anyhow::Result<()> {
         .run();
     Ok(())
 }
-
+fn load_settings(mut commands: Commands) {
+    let config_dir = dirs::config_dir().unwrap().join(env!("CARGO_PKG_NAME"));
+    commands.insert_resource(
+        Persistent::<AudioSettings>::builder()
+            .name("audio settings")
+            .format(StorageFormat::Toml)
+            .path(config_dir.join("audio_settings.toml"))
+            .default(AudioSettings::default())
+            .build().expect("Failed to init audio settings"),
+    );
+}
 fn loaded(
     mut next_state: ResMut<NextState<AppState>>,
     mut timer: Local<Option<Timer>>,
     time: Res<Time>,
+    audio_settings: Option<Res<Persistent<AudioSettings>>>
 ) {
     let timer = timer.get_or_insert(Timer::new(Duration::from_secs(5), TimerMode::Once));
     timer.tick(time.delta());
-    if timer.is_finished() {
+    if audio_settings.is_some() &&  timer.is_finished() {
         next_state.set(AppState::Menu);
     }
 }
@@ -156,7 +166,7 @@ struct StartupScreen;
 #[derive(Resource)]
 struct Seed(Option<String>);
 
-#[derive(Resource)]
+#[derive(Resource,serde::Serialize,serde::Deserialize,Clone)]
 struct AudioSettings {
     music_volume: f32,
 }
@@ -246,7 +256,7 @@ fn remove_startup_screen(mut commands: Commands, screens: Query<Entity, With<Sta
 fn start_background_audio(
     asset_server: Res<AssetServer>,
     audio: Res<AudioChannel<Music>>,
-    audio_settings: Res<AudioSettings>,
+    audio_settings: Res<Persistent<AudioSettings>>,
 ) {
     audio
         .play(asset_server.load("sounds/Pixel Kingdom.wav"))
@@ -347,7 +357,6 @@ fn move_sun(
     };
     light.color = bevy::color::Color::srgba(color.r, color.g, color.b, 1.0);
 }
-
 
 fn startup(
     mut commands: Commands,
@@ -814,4 +823,3 @@ impl ConstructionJob {
         }
     }
 }
-

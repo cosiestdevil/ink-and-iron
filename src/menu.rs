@@ -95,10 +95,12 @@ fn main_menu(
 fn settings_menu(
     mut contexts: EguiContexts,
     mut next_menu_state: ResMut<NextState<MenuState>>,
-    mut audio_settings: ResMut<AudioSettings>,
+    mut audio_settings: ResMut<bevy_persistent::Persistent<AudioSettings>>,
+    mut temp_audio_settings: Local<Option<AudioSettings>>,
     music: Res<AudioChannel<Music>>,
 ) {
     let ctx = contexts.ctx_mut().unwrap();
+    let temp_audio_settings = temp_audio_settings.get_or_insert_with(|| (**audio_settings).clone());
     egui::CentralPanel::default().show(ctx, |_ui| {});
     egui::Area::new("main_menu".into())
         // Anchor to window center, then offset a bit to the left
@@ -115,8 +117,9 @@ fn settings_menu(
                     });
                     // --- Music volume slider ---
                     // 0.0 = mute, 1.0 = full volume
+
                     let slider = egui::Slider::new(
-                        &mut audio_settings.music_volume, // or your actual field name
+                        &mut temp_audio_settings.music_volume, // or your actual field name
                         0.0..=1.0,
                     )
                     .clamping(egui::SliderClamping::Always)
@@ -124,13 +127,21 @@ fn settings_menu(
 
                     if ui.add(slider).changed() {
                         // Apply to the actual audio channel
-                        music.set_volume(((1.0 - audio_settings.music_volume) * -40.) - 10.);
+                        music.set_volume(((1.0 - temp_audio_settings.music_volume) * -40.) - 10.);
                     }
                     ui.add_space(4.0);
-
-                        if ui.button("Return").clicked() {
-                            next_menu_state.set(MenuState::Main);
-                        }
+                    if ui.button("Save").clicked() {
+                        audio_settings
+                            .set(temp_audio_settings.clone())
+                            .expect("Failed to save audio settings");
+                        music.set_volume(((1.0 - audio_settings.music_volume) * -40.) - 10.);
+                        next_menu_state.set(MenuState::Main);
+                    }
+                    if ui.button("Return").clicked() {
+                        *temp_audio_settings = (**audio_settings).clone();
+                        music.set_volume(((1.0 - audio_settings.music_volume) * -40.) - 10.);
+                        next_menu_state.set(MenuState::Main);
+                    }
                 });
         });
 }

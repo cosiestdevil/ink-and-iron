@@ -40,6 +40,8 @@ tracing-appender = "0.2.3"
 bevy_rts_camera = { version = "0.11.1", git="https://github.com/cosiestdevil/bevy_rts_camera.git", branch = "viewport_panning"}
 chrono = "0.4.42"
 zip = "6.0.0"
+bevy-persistent = { version = "0.9.0", features = ["toml"] }
+dirs = "6.0.0"
 
 [dependencies.bevy]
 version = "0.17.2"
