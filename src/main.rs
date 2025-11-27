@@ -414,13 +414,14 @@ fn startup(
                             name: "Unit 1".to_string(),
                             max_health: 10.0,
                             health: 10.0,
+                            range: 0.0,
                             speed: 5.0,
                             used_speed: 0.0,
                             current_cell: cell_id,
                             next_cell: None,
                             goal: None,
                             move_timer: None,
-                            controller: PlayerId(0),
+                            controller: player.id,
                         },
                     },
                 })],
@@ -717,15 +718,57 @@ fn move_unit(
         }
     }
 }
-fn click_unit(mut event: On<Pointer<Click>>, mut selected_unit: ResMut<Selection>) {
+fn click_unit(
+    mut event: On<Pointer<Click>>,
+    mut commands: Commands,
+    mut selection: ResMut<Selection>,
+    mut units: Query<&mut Unit>,
+    game_state: Res<GameState>,
+    world_map: Res<WorldMap>,
+) {
     if event.button == PointerButton::Primary {
-        *selected_unit = Selection::Unit(event.entity);
+        let controller = units.get(event.entity).unwrap().controller;
+        if controller == game_state.active_player {
+            *selection = Selection::Unit(event.entity);
+        } else {
+            match *selection {
+                Selection::None => {}
+                Selection::Unit(entity) => {
+                    let [mut attacker, mut defender] =
+                        units.get_many_mut([entity, event.entity]).unwrap();
+                    let defender_pos = world_map.get_position_for_cell(defender.current_cell);
+                    let attacker_pos = world_map.get_position_for_cell(attacker.current_cell);
+                    let distance = defender_pos.distance(attacker_pos);
+                    if distance <= attacker.range {
+                        defender.health -= 1.0;
+                        if defender.health <= 0.0 {
+                            commands.entity(event.entity).despawn();
+                        }
+                    }
+                    if distance <= defender.range {
+                        attacker.health -= 1.0;
+                        if attacker.health <= 0.0 {
+                            commands.entity(entity).despawn();
+                        }
+                    }
+                }
+                Selection::Settlement(entity) => {}
+            }
+        }
         event.propagate(false);
     }
 }
-fn click_settlement(mut event: On<Pointer<Click>>, mut selected_unit: ResMut<Selection>) {
+fn click_settlement(
+    mut event: On<Pointer<Click>>,
+    mut selected_unit: ResMut<Selection>,
+    settlements: Query<&SettlementCenter>,
+    game_state: Res<GameState>,
+) {
     if event.button == PointerButton::Primary {
-        *selected_unit = Selection::Settlement(event.entity);
+        let settlement = settlements.get(event.entity).unwrap();
+        if settlement.controller == game_state.active_player {
+            *selected_unit = Selection::Settlement(event.entity);
+        }
         event.propagate(false);
     }
 }
@@ -751,6 +794,7 @@ struct Unit {
     name: String,
     max_health: f32,
     health: f32,
+    range: f32,
     controller: PlayerId,
     speed: f32,
     used_speed: f32,
