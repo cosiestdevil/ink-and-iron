@@ -567,6 +567,7 @@ fn turn_start(
         {
             let production = settlement.production;
             let cell = settlement.cell;
+            let mut completed_construction = false;
             if let Some(ref mut construction) = settlement.construction {
                 match construction {
                     ConstructionJob::Unit(unit_constuction) => {
@@ -583,12 +584,25 @@ fn turn_start(
                                     Transform::from_translation(pos),
                                 ));
                                 unit.observe(click_unit);
+                                completed_construction = true;
+
                                 settlement.construction = None;
                             } else {
                                 info!("No space for unit!");
                             }
                         }
+                    },
+                    ConstructionJob::Sink(sink_constuction) => {
+                        if sink_constuction.add_progress(production) {
+                            completed_construction = true;
+                            settlement.construction = None;
+                        }
                     }
+                }
+            }
+            if completed_construction {
+                for con in settlement.available_constructions.iter_mut() {
+                    con.increase();
                 }
             }
         }
@@ -794,6 +808,26 @@ impl Construction for UnitConstuction {
         self.progress
     }
 }
+#[derive(Clone)]
+struct SinkConstuction {
+    cost: f32,
+    progress: f32,
+}
+impl Construction for SinkConstuction {
+    fn add_progress(&mut self, progress: f32) -> bool {
+        self.progress += progress;
+        self.progress >= self.cost
+    }
+
+    fn cost(&self) -> f32 {
+        self.cost
+    }
+
+    fn progress(&self) -> f32 {
+        self.progress
+    }
+    
+}
 #[derive(Bundle, Clone)]
 struct UnitTemplate {
     unit: Unit,
@@ -803,6 +837,7 @@ struct UnitTemplate {
 #[derive(Clone)]
 enum ConstructionJob {
     Unit(UnitConstuction),
+    Sink(SinkConstuction),
 }
 impl ConstructionJob {
     pub fn progress_label(&self, ui: &mut Ui) {
@@ -813,6 +848,12 @@ impl ConstructionJob {
                     unit_constuction.name,
                     unit_constuction.progress(),
                     unit_constuction.cost()
+                ));
+            }
+            ConstructionJob::Sink(sink) =>{ui.label(format!(
+                    "Sink: {}/{}",
+                    sink.progress(),
+                    sink.cost()
                 ));
             }
         }
@@ -826,6 +867,23 @@ impl ConstructionJob {
                     unit_constuction.name, unit_constuction.cost
                 )),
             ),
+            ConstructionJob::Sink(sink) =>ui.add_enabled(
+                enabled,
+                egui::widgets::Button::new(format!(
+                    "Sink: {}",
+                    sink.cost
+                )),
+            )
+        }
+    }
+    pub fn increase(&mut self) {
+        match self {
+            ConstructionJob::Unit(unit_constuction) => {
+                unit_constuction.cost = unit_constuction.cost.powf(1.5);
+            }
+            ConstructionJob::Sink(sink_constuction) => {
+                sink_constuction.cost = sink_constuction.cost.powf(1.5)
+            },
         }
     }
 }
