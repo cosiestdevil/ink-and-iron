@@ -282,9 +282,11 @@ fn over_cell(
     world_map: Res<WorldMap>,
     mut commands: Commands,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    pathfinding: Res<crate::pathfinding::PathFinding>,
 ) {
-    let (graph, nodes) = pathfinding::get_graph(&world_map);
+    
     if let Selection::Unit(unit_entity) = *selected {
+        let crate::pathfinding::PathFinding{graph, nodes} = pathfinding.as_ref();
         for (e, _highlight) in highlights.iter() {
             let mut e = commands.entity(e);
             e.despawn();
