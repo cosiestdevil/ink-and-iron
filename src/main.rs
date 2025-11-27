@@ -99,12 +99,7 @@ fn main() -> anyhow::Result<()> {
         .insert_resource::<generate::WorldGenerationParams>((&args).into())
         .add_systems(
             Startup,
-            (
-                load_settings,
-                startup_screens,
-                setup_rng,
-                archive_old_logs,
-            ),
+            (load_settings, startup_screens, setup_rng, archive_old_logs),
         )
         .add_systems(
             Update,
@@ -143,18 +138,19 @@ fn load_settings(mut commands: Commands) {
             .format(StorageFormat::Toml)
             .path(config_dir.join("audio_settings.toml"))
             .default(AudioSettings::default())
-            .build().expect("Failed to init audio settings"),
+            .build()
+            .expect("Failed to init audio settings"),
     );
 }
 fn loaded(
     mut next_state: ResMut<NextState<AppState>>,
     mut timer: Local<Option<Timer>>,
     time: Res<Time>,
-    audio_settings: Option<Res<Persistent<AudioSettings>>>
+    audio_settings: Option<Res<Persistent<AudioSettings>>>,
 ) {
     let timer = timer.get_or_insert(Timer::new(Duration::from_secs(5), TimerMode::Once));
     timer.tick(time.delta());
-    if audio_settings.is_some() &&  timer.is_finished() {
+    if audio_settings.is_some() && timer.is_finished() {
         next_state.set(AppState::Menu);
     }
 }
@@ -166,7 +162,7 @@ struct StartupScreen;
 #[derive(Resource)]
 struct Seed(Option<String>);
 
-#[derive(Resource,serde::Serialize,serde::Deserialize,Clone)]
+#[derive(Resource, serde::Serialize, serde::Deserialize, Clone)]
 struct AudioSettings {
     music_volume: f32,
 }
