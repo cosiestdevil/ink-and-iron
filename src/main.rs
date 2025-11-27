@@ -92,6 +92,7 @@ fn main() -> anyhow::Result<()> {
         .add_message::<TurnStart>()
         .init_state::<AppState>()
         .init_resource::<InputFocus>()
+        .init_resource::<crate::pathfinding::PathFinding>()
         .insert_resource(Seed(args.seed.clone()))
         .insert_resource(GameState::new(2))
         .insert_resource::<Random<RandomRng>>(Random(None))
@@ -534,7 +535,10 @@ fn turn_start(
     highlights: Query<Entity, With<CellHighlight>>,
     game_state: Res<GameState>,
     world_map: Res<WorldMap>,
+    mut pathfinding: ResMut<crate::pathfinding::PathFinding>,
 ) {
+    let (graph, nodes) = pathfinding::get_graph(&world_map);    
+    *pathfinding = pathfinding::PathFinding { graph, nodes };
     for turn in turn_start.read() {
         let player = game_state.players.get(&turn.player).unwrap();
         for (mut camera, entity, mut controls) in cameras.iter_mut() {
