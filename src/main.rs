@@ -538,7 +538,7 @@ fn turn_start(
     world_map: Res<WorldMap>,
     mut pathfinding: ResMut<crate::pathfinding::PathFinding>,
 ) {
-    let (graph, nodes) = pathfinding::get_graph(&world_map);    
+    let (graph, nodes) = pathfinding::get_graph(&world_map);
     *pathfinding = pathfinding::PathFinding { graph, nodes };
     for turn in turn_start.read() {
         let player = game_state.players.get(&turn.player).unwrap();
@@ -652,7 +652,11 @@ impl GameState {
         }
     }
 }
-fn set_unit_next_cell(mut units: Query<&mut Unit>, world_map: Res<WorldMap>,pathfinding: Res<crate::pathfinding::PathFinding>) {
+fn set_unit_next_cell(
+    mut units: Query<&mut Unit>,
+    world_map: Res<WorldMap>,
+    pathfinding: Res<crate::pathfinding::PathFinding>,
+) {
     for mut unit in units.iter_mut() {
         if let Some(goal) = unit.goal {
             if unit.current_cell == goal {
@@ -662,7 +666,7 @@ fn set_unit_next_cell(mut units: Query<&mut Unit>, world_map: Res<WorldMap>,path
                 continue;
             }
             if unit.next_cell.is_none() {
-                let crate::pathfinding::PathFinding{graph, nodes} = pathfinding.as_ref();
+                let crate::pathfinding::PathFinding { graph, nodes } = pathfinding.as_ref();
                 let result = pathfinding::a_star(unit.current_cell, goal, graph, nodes, &world_map);
                 match result {
                     Some(mut result) => {
