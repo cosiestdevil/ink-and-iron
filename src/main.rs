@@ -260,8 +260,14 @@ fn start_background_audio(
             Duration::from_secs(2),
             AudioEasing::InPowi(2),
         ))
-        .with_volume(((1.0 - audio_settings.music_volume) * -40.) - 10.)
+        .with_volume(volume_from_slider(audio_settings.music_volume))
         .looped();
+}
+fn volume_from_slider(slider: f32) -> f32 {
+    let min_db = Decibels::SILENCE.0;
+    let max_db = Decibels::IDENTITY.0;
+    let shaped = slider.powf(2.0);
+    min_db + (max_db - min_db) * shaped
 }
 fn deselect(
     mut commands: Commands,

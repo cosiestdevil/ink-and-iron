@@ -127,19 +127,21 @@ fn settings_menu(
 
                     if ui.add(slider).changed() {
                         // Apply to the actual audio channel
-                        music.set_volume(((1.0 - temp_audio_settings.music_volume) * -40.) - 10.);
+                        music.set_volume(crate::volume_from_slider(temp_audio_settings.music_volume) );
+                        
                     }
                     ui.add_space(4.0);
                     if ui.button("Save").clicked() {
                         audio_settings
                             .set(temp_audio_settings.clone())
                             .expect("Failed to save audio settings");
-                        music.set_volume(((1.0 - audio_settings.music_volume) * -40.) - 10.);
+                        music.set_volume(crate::volume_from_slider(audio_settings.music_volume) );
+                        
                         next_menu_state.set(MenuState::Main);
                     }
                     if ui.button("Return").clicked() {
                         *temp_audio_settings = (**audio_settings).clone();
-                        music.set_volume(((1.0 - audio_settings.music_volume) * -40.) - 10.);
+                        music.set_volume(crate::volume_from_slider(audio_settings.music_volume) );
                         next_menu_state.set(MenuState::Main);
                     }
                 });
