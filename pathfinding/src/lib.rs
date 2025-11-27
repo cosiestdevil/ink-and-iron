@@ -60,8 +60,8 @@ impl AStarNode {
 pub fn a_star(
     start: CellId,
     goal: CellId,
-    graph: Graph<CellId, f32>,
-    nodes: HashMap<CellId, NodeIndex>,
+    graph: &Graph<CellId, f32>,
+    nodes: &HashMap<CellId, NodeIndex>,
     world_map:&WorldMap,
 ) -> Option<Vec<CellId>> {
     let mut open_list = vec![AStarNode::new(

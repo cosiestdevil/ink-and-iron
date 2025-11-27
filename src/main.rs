@@ -637,7 +637,7 @@ impl GameState {
         }
     }
 }
-fn set_unit_next_cell(mut units: Query<&mut Unit>, world_map: Res<WorldMap>) {
+fn set_unit_next_cell(mut units: Query<&mut Unit>, world_map: Res<WorldMap>,pathfinding: Res<crate::pathfinding::PathFinding>) {
     for mut unit in units.iter_mut() {
         if let Some(goal) = unit.goal {
             if unit.current_cell == goal {
@@ -647,7 +647,7 @@ fn set_unit_next_cell(mut units: Query<&mut Unit>, world_map: Res<WorldMap>) {
                 continue;
             }
             if unit.next_cell.is_none() {
-                let (graph, nodes) = pathfinding::get_graph(&world_map);
+                let crate::pathfinding::PathFinding{graph, nodes} = pathfinding.as_ref();
                 let result = pathfinding::a_star(unit.current_cell, goal, graph, nodes, &world_map);
                 match result {
                     Some(mut result) => {
