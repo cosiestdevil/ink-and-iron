@@ -735,6 +735,7 @@ fn click_unit(
     mut units: Query<&mut Unit>,
     game_state: Res<GameState>,
     world_map: Res<WorldMap>,
+    pathfinding: Res<crate::pathfinding::PathFinding>,
 ) {
     if event.button == PointerButton::Primary {
         let controller = units.get(event.entity).unwrap().controller;
@@ -746,23 +747,31 @@ fn click_unit(
                 Selection::Unit(entity) => {
                     let [mut attacker, mut defender] =
                         units.get_many_mut([entity, event.entity]).unwrap();
-                    let defender_pos = world_map.get_position_for_cell(defender.current_cell);
-                    let attacker_pos = world_map.get_position_for_cell(attacker.current_cell);
-                    let distance = defender_pos.distance(attacker_pos);
-                    if distance <= attacker.range {
-                        defender.health -= 1.0;
-                        if defender.health <= 0.0 {
-                            commands.entity(event.entity).despawn();
+                    let crate::pathfinding::PathFinding { graph, nodes } = pathfinding.as_ref();
+                    let result = pathfinding::a_star(
+                        attacker.current_cell,
+                        defender.current_cell,
+                        graph,
+                        nodes,
+                        &world_map,
+                    );
+                    if let Some(result) = result {
+                        let distance = result.len() - 1;
+                        if distance <= attacker.range {
+                            defender.health -= 1.0;
+                            if defender.health <= 0.0 {
+                                commands.entity(event.entity).despawn();
+                            }
                         }
-                    }
-                    if distance <= defender.range {
-                        attacker.health -= 1.0;
-                        if attacker.health <= 0.0 {
-                            commands.entity(entity).despawn();
+                        if distance <= defender.range {
+                            attacker.health -= 1.0;
+                            if attacker.health <= 0.0 {
+                                commands.entity(entity).despawn();
+                            }
                         }
                     }
                 }
-                Selection::Settlement(entity) => {}
+                Selection::Settlement(_entity) => {}
             }
         }
         event.propagate(false);
