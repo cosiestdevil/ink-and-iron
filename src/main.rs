@@ -85,6 +85,7 @@ fn main() -> anyhow::Result<()> {
             AudioPlugin,
             EasingsPlugin::default(),
             RtsCameraPlugin,
+            bevy_panic_handler::PanicHandler::new().build(),
         ))
         .add_audio_channel::<Music>()
         .add_plugins(bevy_tokio_tasks::TokioTasksPlugin::default())
