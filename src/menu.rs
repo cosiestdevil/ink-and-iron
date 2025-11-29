@@ -100,8 +100,11 @@ fn new_game_menu(
     mut contexts: EguiContexts,
     mut next_state: ResMut<NextState<AppState>>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
+    mut params: ResMut<crate::generate::WorldGenerationParams>,
+    mut temp_params: Local<Option<world_generation::WorldGenerationParams>>,
 ) {
     let ctx = contexts.ctx_mut().unwrap();
+    let temp_params = temp_params.get_or_insert_with(|| params.0.unwrap());
     egui::CentralPanel::default().show(ctx, |_ui| {});
     egui::Area::new("main_menu".into())
         .anchor(Align2::CENTER_CENTER, egui::vec2(MENU_OFFSET_X, 0.0))
@@ -110,11 +113,29 @@ fn new_game_menu(
             ui.vertical_centered(|ui| {
                 ui.heading("New Game");
                 ui.add_space(12.0);
+                //ui.radio_value(temp_params.world_type, alternative, atoms);
+                egui::ComboBox::from_label("World Type")
+                    .selected_text(format!("{:?}", temp_params.world_type))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(
+                            &mut temp_params.world_type,
+                            world_generation::WorldType::Default,
+                            "Default",
+                        );
+                        ui.selectable_value(
+                            &mut temp_params.world_type,
+                            world_generation::WorldType::Flat,
+                            "Flat",
+                        );
+                    });                   
+                ui.add_space(4.0);
                 if ui.button("Start").clicked() {
+                    params.0 = Some(*temp_params);
                     next_state.set(AppState::Generating);
                 }
                 ui.add_space(4.0);
                 if ui.button("Return").clicked() {
+                    *temp_params = params.0.unwrap();
                     next_menu_state.set(MenuState::Main);
                 }
             });
