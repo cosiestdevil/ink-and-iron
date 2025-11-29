@@ -598,7 +598,7 @@ fn turn_start(
                                 info!("No space for unit!");
                             }
                         }
-                    },
+                    }
                     ConstructionJob::Sink(sink_constuction) => {
                         if sink_constuction.add_progress(production) {
                             completed_construction = true;
@@ -889,7 +889,6 @@ impl Construction for SinkConstuction {
     fn progress(&self) -> f32 {
         self.progress
     }
-    
 }
 #[derive(Bundle, Clone)]
 struct UnitTemplate {
@@ -913,11 +912,8 @@ impl ConstructionJob {
                     unit_constuction.cost()
                 ));
             }
-            ConstructionJob::Sink(sink) =>{ui.label(format!(
-                    "Sink: {}/{}",
-                    sink.progress(),
-                    sink.cost()
-                ));
+            ConstructionJob::Sink(sink) => {
+                ui.label(format!("Sink: {}/{}", sink.progress(), sink.cost()));
             }
         }
     }
@@ -930,13 +926,10 @@ impl ConstructionJob {
                     unit_constuction.name, unit_constuction.cost
                 )),
             ),
-            ConstructionJob::Sink(sink) =>ui.add_enabled(
+            ConstructionJob::Sink(sink) => ui.add_enabled(
                 enabled,
-                egui::widgets::Button::new(format!(
-                    "Sink: {}",
-                    sink.cost
-                )),
-            )
+                egui::widgets::Button::new(format!("Sink: {}", sink.cost)),
+            ),
         }
     }
     pub fn increase(&mut self) {
@@ -946,7 +939,7 @@ impl ConstructionJob {
             }
             ConstructionJob::Sink(sink_constuction) => {
                 sink_constuction.cost = sink_constuction.cost.powf(1.5)
-            },
+            }
         }
     }
 }
