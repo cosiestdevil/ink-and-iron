@@ -34,8 +34,8 @@ pub enum WorldType {
 impl std::fmt::Display for WorldType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WorldType::Default => write!(f, "Default"),
-            WorldType::Flat => write!(f, "Flat"),
+            WorldType::Default => write!(f, "default"),
+            WorldType::Flat => write!(f, "flat"),
         }
     }
 }
