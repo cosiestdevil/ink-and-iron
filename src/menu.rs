@@ -19,6 +19,10 @@ impl Plugin for MenuPlugin {
             EguiPrimaryContextPass,
             settings_menu.run_if(in_state(MenuState::Settings)),
         );
+        app.add_systems(
+            EguiPrimaryContextPass,
+            new_game_menu.run_if(in_state(MenuState::NewGame)),
+        );
     }
 }
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -46,7 +50,6 @@ const MENU_OFFSET_X: f32 = -200.0; // negative = left of center
 const MENU_WIDTH: f32 = 220.0;
 fn main_menu(
     mut contexts: EguiContexts,
-    mut next_state: ResMut<NextState<AppState>>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
     mut exit_events: MessageWriter<bevy::app::AppExit>,
 ) {
@@ -73,7 +76,7 @@ fn main_menu(
                         ui.add_space(12.0);
 
                         if ui.button("New Game").clicked() {
-                            next_state.set(AppState::Generating);
+                            next_menu_state.set(MenuState::NewGame);
                         }
 
                         ui.add_space(4.0);
@@ -92,6 +95,32 @@ fn main_menu(
                 });
         });
 }
+
+fn new_game_menu(
+    mut contexts: EguiContexts,
+    mut next_state: ResMut<NextState<AppState>>,
+    mut next_menu_state: ResMut<NextState<MenuState>>,
+) {
+    let ctx = contexts.ctx_mut().unwrap();
+    egui::CentralPanel::default().show(ctx, |_ui| {});
+    egui::Area::new("main_menu".into())
+        .anchor(Align2::CENTER_CENTER, egui::vec2(MENU_OFFSET_X, 0.0))
+        .show(ctx, |ui| {
+            ui.set_width(MENU_WIDTH);
+            ui.vertical_centered(|ui| {
+                ui.heading("New Game");
+                ui.add_space(12.0);
+                if ui.button("Start").clicked() {
+                    next_state.set(AppState::Generating);
+                }
+                ui.add_space(4.0);
+                if ui.button("Return").clicked() {
+                    next_menu_state.set(MenuState::Main);
+                }
+            });
+        });
+}
+
 fn settings_menu(
     mut contexts: EguiContexts,
     mut next_menu_state: ResMut<NextState<MenuState>>,
