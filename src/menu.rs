@@ -143,36 +143,40 @@ fn settings_menu(
                     ui.vertical_centered(|ui| {
                         ui.heading("Settings");
                         ui.add_space(12.0);
+
+                        // --- Music volume slider ---
+                        // 0.0 = mute, 1.0 = full volume
+
+                        let slider = egui::Slider::new(
+                            &mut temp_audio_settings.music_volume, // or your actual field name
+                            0.0..=1.0,
+                        )
+                        .clamping(egui::SliderClamping::Always)
+                        .text("Music volume");
+
+                        if ui.add(slider).changed() {
+                            // Apply to the actual audio channel
+                            music.set_volume(crate::volume_from_slider(
+                                temp_audio_settings.music_volume,
+                            ));
+                        }
+                        ui.add_space(4.0);
+                        if ui.button("Save").clicked() {
+                            audio_settings
+                                .set(temp_audio_settings.clone())
+                                .expect("Failed to save audio settings");
+                            music
+                                .set_volume(crate::volume_from_slider(audio_settings.music_volume));
+
+                            next_menu_state.set(MenuState::Main);
+                        }
+                        if ui.button("Return").clicked() {
+                            *temp_audio_settings = (**audio_settings).clone();
+                            music
+                                .set_volume(crate::volume_from_slider(audio_settings.music_volume));
+                            next_menu_state.set(MenuState::Main);
+                        }
                     });
-                    // --- Music volume slider ---
-                    // 0.0 = mute, 1.0 = full volume
-
-                    let slider = egui::Slider::new(
-                        &mut temp_audio_settings.music_volume, // or your actual field name
-                        0.0..=1.0,
-                    )
-                    .clamping(egui::SliderClamping::Always)
-                    .text("Music volume");
-
-                    if ui.add(slider).changed() {
-                        // Apply to the actual audio channel
-                        music.set_volume(crate::volume_from_slider(temp_audio_settings.music_volume) );
-                        
-                    }
-                    ui.add_space(4.0);
-                    if ui.button("Save").clicked() {
-                        audio_settings
-                            .set(temp_audio_settings.clone())
-                            .expect("Failed to save audio settings");
-                        music.set_volume(crate::volume_from_slider(audio_settings.music_volume) );
-                        
-                        next_menu_state.set(MenuState::Main);
-                    }
-                    if ui.button("Return").clicked() {
-                        *temp_audio_settings = (**audio_settings).clone();
-                        music.set_volume(crate::volume_from_slider(audio_settings.music_volume) );
-                        next_menu_state.set(MenuState::Main);
-                    }
                 });
         });
 }
