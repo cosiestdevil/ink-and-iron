@@ -3,7 +3,7 @@
 use std::{collections::HashMap, path::Path, time::Duration};
 
 use crate::{
-    generate::{CellId, WorldMap},
+    generate::{CellId, WorldMap, WorldType},
     llm::SettlementNameCtx,
 };
 use bevy::{
@@ -50,6 +50,8 @@ struct Args {
     ocean_size: usize,
     #[arg(long)]
     seed: Option<String>,
+    #[arg(long, default_value_t = WorldType::Default)]
+    world_type:WorldType,
 }
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
 pub(crate) enum AppState {

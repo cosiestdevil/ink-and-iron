@@ -135,8 +135,13 @@ pub struct WorldGenerationParams {
     pub ocean_count: usize,
     pub ocean_size: usize,
     pub scale: f32,
+    pub world_type: WorldType,
 }
-
+#[derive(Clone, Copy)]
+pub enum WorldType {
+    Default = 0,
+    Flat = 1,
+}
 
 pub fn generate_world<R: Rng + Clone>(
     params: WorldGenerationParams,
@@ -152,6 +157,7 @@ pub fn generate_world<R: Rng + Clone>(
         ocean_count,
         ocean_size,
         scale,
+        world_type,
     } = params;
     let fbm = Fbm::<Perlin>::new(rng.next_u32());
     let ridged_multi = RidgedMulti::<Perlin>::new(rng.next_u32());
@@ -346,36 +352,39 @@ pub fn generate_world<R: Rng + Clone>(
     }
 
     let noise_scale = 50.0;
-    let mut h = generate_heightmap(&cells, plates, |p| {
-        // Simple FBM + ridged noise
-        let a = fbm.get([p.x as f64 * noise_scale, p.y as f64 * noise_scale]) as f32 * 0.5;
-        let b = ridged_multi.get([p.x as f64 * noise_scale, p.y as f64 * noise_scale]) as f32 * 1.0;
-        (a, b)
-    });
-    println!(
-        "heightmap max: {}, min: {}",
-        h.iter().cloned().fold(f32::MIN, f32::max),
-        h.iter().cloned().fold(f32::MAX, f32::min)
-    );
-    normalize_split01_in_place(h.as_mut_slice());
-    println!(
-        "heightmap max: {}, min: {}",
-        h.iter().cloned().fold(f32::MIN, f32::max),
-        h.iter().cloned().fold(f32::MAX, f32::min)
-    );
-    let cells_height = cells
-        .iter()
-        .enumerate()
-        .map(|(i, c)| (c.id, h[i]))
-        .collect::<HashMap<CellId, f32>>();
-    // svg::render(
-    //     width,
-    //     height,
-    //     &continents_voronoi,
-    //     &continents,
-    //     cells_height,
-    //     "continents_voronoi_merged.svg",
-    // )?;
+    let cells_height = match world_type {
+        WorldType::Default => {
+            let mut h = generate_heightmap(&cells, plates, |p| {
+                // Simple FBM + ridged noise
+                let a = fbm.get([p.x as f64 * noise_scale, p.y as f64 * noise_scale]) as f32 * 0.5;
+                let b = ridged_multi.get([p.x as f64 * noise_scale, p.y as f64 * noise_scale])
+                    as f32
+                    * 1.0;
+                (a, b)
+            });
+            println!(
+                "heightmap max: {}, min: {}",
+                h.iter().cloned().fold(f32::MIN, f32::max),
+                h.iter().cloned().fold(f32::MAX, f32::min)
+            );
+            normalize_split01_in_place(h.as_mut_slice());
+            println!(
+                "heightmap max: {}, min: {}",
+                h.iter().cloned().fold(f32::MIN, f32::max),
+                h.iter().cloned().fold(f32::MAX, f32::min)
+            );
+            cells
+                .iter()
+                .enumerate()
+                .map(|(i, c)| (c.id, h[i]))
+                .collect::<HashMap<CellId, f32>>()
+        }
+        WorldType::Flat => cells
+            .iter()
+            .map(|c| (c.id, 0.5))
+            .collect::<HashMap<CellId, f32>>(),
+    };
+
     Ok(WorldMap {
         scale,
         height_scale: scale * 0.25,

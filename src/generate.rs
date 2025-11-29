@@ -4,6 +4,7 @@ use bevy::{
 use bevy_easings::Ease;
 use bevy_rts_camera::Ground;
 use bevy_tokio_tasks::TokioTasksRuntime;
+use clap::ValueEnum;
 use colorgrad::Gradient;
 use llm_api::SettlementNameCtx;
 use rand::Rng;
@@ -25,6 +26,27 @@ impl Deref for WorldMap {
         }
     }
 }
+#[derive(Clone, Copy,ValueEnum,Debug)]
+pub enum WorldType {
+    Default = 0,
+    Flat = 1,
+}
+impl std::fmt::Display for WorldType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WorldType::Default => write!(f, "Default"),
+            WorldType::Flat => write!(f, "Flat"),
+        }
+    }
+}
+impl From<WorldType> for world_generation::WorldType {
+    fn from(value: WorldType) -> Self {
+        match value {
+            WorldType::Default => world_generation::WorldType::Default,
+            WorldType::Flat => world_generation::WorldType::Flat,
+        }
+    }
+}
 #[derive(Resource)]
 pub struct WorldGenerationParams(pub Option<world_generation::WorldGenerationParams>);
 impl From<&crate::Args> for WorldGenerationParams {
@@ -39,6 +61,7 @@ impl From<&crate::Args> for WorldGenerationParams {
             ocean_count: value.ocean_count,
             ocean_size: value.ocean_size,
             scale: 30.0,
+            world_type:value.world_type.into(),
         }))
     }
 }
