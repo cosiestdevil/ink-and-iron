@@ -9,4 +9,7 @@ path = "./src/lib.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
+llm-api = {path = "../llm-api"}
 llm-provider = {path = "../llm-provider",features = ["cuda"]}
+tokio = { workspace = true}
+anyhow = "*"

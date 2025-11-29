@@ -5272,7 +5272,10 @@ dependencies = [
 name = "llm-provider-cuda"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "llm-api",
  "llm-provider",
+ "tokio",
 ]
 
 [[package]]
