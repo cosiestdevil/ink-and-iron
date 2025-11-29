@@ -6,7 +6,7 @@ use std::{
 };
 
 use geo::{Contains, CoordsIter, Polygon, unary_union};
-use glam::{Vec2,Vec3,Vec3Swizzles};
+use glam::{Vec2, Vec3, Vec3Swizzles};
 use noise::{Fbm, NoiseFn, Perlin, RidgedMulti};
 use rand::{
     Rng,
