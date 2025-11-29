@@ -403,28 +403,34 @@ fn startup(
                 production: 1.0,
                 construction: None,
                 cell: cell_id,
-                available_constructions: vec![ConstructionJob::Unit(UnitConstuction {
-                    name: "Unit 1".to_string(),
-                    cost: 2.0,
-                    progress: 0.0,
-                    template: UnitTemplate {
-                        mesh: Mesh3d(unit_mesh),
-                        material: MeshMaterial3d(player_mat.clone()),
-                        unit: Unit {
-                            name: "Unit 1".to_string(),
-                            max_health: 10.0,
-                            health: 10.0,
-                            range: 0.0,
-                            speed: 5.0,
-                            used_speed: 0.0,
-                            current_cell: cell_id,
-                            next_cell: None,
-                            goal: None,
-                            move_timer: None,
-                            controller: player.id,
-                        },
-                    },
-                })],
+                available_constructions: vec![
+                    ConstructionJob::Unit(UnitConstuction {
+                        name: "Unit 1".to_string(),
+                        cost: 2.0,
+                        progress: 0.0,
+                        template: Box::new(UnitTemplate {
+                            mesh: Mesh3d(unit_mesh),
+                            material: MeshMaterial3d(player_mat.clone()),
+                            unit: Unit {
+                                name: "Unit 1".to_string(),
+                                max_health: 10.0,
+                                health: 10.0,
+                                range: 1,
+                                speed: 5.0,
+                                used_speed: 0.0,
+                                current_cell: cell_id,
+                                next_cell: None,
+                                goal: None,
+                                move_timer: None,
+                                controller: player.id,
+                            },
+                        }),
+                    }),
+                    ConstructionJob::Sink(SinkConstuction {
+                        cost: 5.0,
+                        progress: 0.0,
+                    }),
+                ],
             };
             let camera_entity = commands
                 .spawn((
@@ -798,7 +804,7 @@ struct Unit {
     name: String,
     max_health: f32,
     health: f32,
-    range: f32,
+    range: usize,
     controller: PlayerId,
     speed: f32,
     used_speed: f32,
@@ -827,7 +833,7 @@ trait Construction {
 struct UnitConstuction {
     cost: f32,
     progress: f32,
-    template: UnitTemplate,
+    template: Box<UnitTemplate>,
     name: String,
 }
 impl UnitConstuction {
@@ -837,7 +843,7 @@ impl UnitConstuction {
                 current_cell: cell,
                 ..self.template.unit.clone()
             },
-            ..self.template.clone()
+            ..*self.template.clone()
         }
     }
 }
