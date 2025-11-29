@@ -6,7 +6,7 @@ use bevy_rts_camera::Ground;
 use bevy_tokio_tasks::TokioTasksRuntime;
 use clap::ValueEnum;
 use colorgrad::Gradient;
-use llm_api::SettlementNameCtx;
+use llm_api::{settlement_names::SettlementNameCtx, unit_spawn_barks::UnitSpawnBarkCtx};
 use rand::Rng;
 use std::{collections::HashMap, ops::Deref};
 pub use world_generation::*;
@@ -73,12 +73,59 @@ impl Plugin for WorldPlugin {
         app.add_sub_state::<GenerationState>();
         app.add_systems(OnEnter(GenerationState::World), gen_world);
         app.add_systems(OnEnter(GenerationState::Settlements), generate_settlement_name);
+        app.add_systems(OnEnter(GenerationState::UnitSpawn), generate_unit_spawn_barks);
         app.add_systems(OnEnter(GenerationState::Spawn), spawn_world);
         app.add_systems(OnEnter(GenerationState::Finshed),(remove_marked::<GenerationScreen>, generated_screen));
         app.add_systems(OnExit(GenerationState::Finshed), remove_marked::<GeneratedScreen>);
         app.add_systems(Update, button_system.run_if(in_state(GenerationState::Finshed)));
     }
 }
+fn generate_unit_spawn_barks(
+    mut rng: ResMut<Random<crate::RandomRng>>,
+    runtime: ResMut<TokioTasksRuntime>,
+    game_state: Res<GameState>,
+) {
+    let temp = rng.0.as_mut().unwrap().random_range(0.3..0.5);
+    for player in game_state.players.values() {
+        let civ_name = player.settlement_context.civilisation_name.clone();
+        let unit_type = "Warrior".to_string(); // TODO: get from context
+        let player_id = player.id;
+        runtime.spawn_background_task(move |mut ctx| async move {
+            if let Ok(barks) = llm::unit_spawn_barks(
+                UnitSpawnBarkCtx {
+                    civilisation_name: civ_name,
+                    unit_type,
+                },
+                temp,
+            )
+            .await
+            {
+                ctx.run_on_main_thread(move |ctx| {
+                    let world = ctx.world;
+                    let (mut game_state, mut next_state) = {
+                        let mut system_state = SystemState::<(
+                            ResMut<GameState>,
+                            ResMut<NextState<GenerationState>>,
+                        )>::new(world);
+                        system_state.get_mut(world)
+                    };
+                    let player = game_state.players.get_mut(&player_id).unwrap();
+                    player.unit_spawn_barks = barks;
+                    if game_state
+                        .players
+                        .values()
+                        .all(|p| !p.unit_spawn_barks.is_empty())
+                    {
+                        next_state.set(GenerationState::Spawn);
+                    }
+                })
+                .await;
+            }
+        });
+    }
+}
+
+
 fn generate_settlement_name(
     mut rng: ResMut<Random<crate::RandomRng>>,
     runtime: ResMut<TokioTasksRuntime>,
@@ -113,7 +160,7 @@ fn generate_settlement_name(
                         .values()
                         .all(|p| !p.settlement_names.is_empty())
                     {
-                        next_state.set(GenerationState::Spawn);
+                        next_state.set(GenerationState::UnitSpawn);
                     }
                 })
                 .await;
@@ -357,6 +404,7 @@ enum GenerationState {
     #[default]
     World,
     Settlements,
+    UnitSpawn,
     Spawn,
     Finshed,
 }

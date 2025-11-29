@@ -542,14 +542,14 @@ fn turn_start(
     mut settlements: Query<&mut SettlementCenter>,
     mut selected: ResMut<Selection>,
     highlights: Query<Entity, With<CellHighlight>>,
-    game_state: Res<GameState>,
+    mut game_state: ResMut<GameState>,
     world_map: Res<WorldMap>,
     mut pathfinding: ResMut<crate::pathfinding::PathFinding>,
 ) {
     let (graph, nodes) = pathfinding::get_graph(&world_map);
     *pathfinding = pathfinding::PathFinding { graph, nodes };
     for turn in turn_start.read() {
-        let player = game_state.players.get(&turn.player).unwrap();
+        let player = game_state.players.get_mut(&turn.player).unwrap();
         for (mut camera, entity, mut controls) in cameras.iter_mut() {
             if let Some(player_camera_entity) = player.camera_entity
                 && player_camera_entity == entity
@@ -593,6 +593,8 @@ fn turn_start(
                                     Transform::from_translation(pos),
                                 ));
                                 unit.observe(click_unit);
+                                info!("Unit constructed!");
+                                info!("{}",player.unit_spawn_barks.pop().unwrap_or("Unit spawned!".to_string()));
                                 completed_construction = true;
 
                                 settlement.construction = None;
@@ -625,6 +627,7 @@ struct Player {
     camera_entity: Option<Entity>,
     settlement_names: Vec<String>,
     settlement_context: SettlementNameCtx,
+    unit_spawn_barks: Vec<String>,
 }
 #[derive(Resource)]
 struct GameState {
@@ -649,6 +652,7 @@ impl GameState {
                 },
                 camera_entity: None,
                 color,
+                unit_spawn_barks: vec![],
             };
             players.insert(player.id, player);
         }
