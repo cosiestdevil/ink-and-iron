@@ -56,6 +56,8 @@ struct Args {
     seed: Option<String>,
     #[arg(long, default_value_t = WorldType::Default)]
     world_type: WorldType,
+    #[arg(long,default_value_t=false)]
+    llm_cpu:bool
 }
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
 pub(crate) enum AppState {
@@ -67,6 +69,8 @@ pub(crate) enum AppState {
 }
 mod logs;
 mod menu;
+#[derive(Resource)]
+struct LLMCPU(bool);
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     App::new()
@@ -100,6 +104,7 @@ fn main() -> anyhow::Result<()> {
         .init_state::<AppState>()
         .init_resource::<InputFocus>()
         .init_resource::<crate::pathfinding::PathFinding>()
+        .insert_resource(LLMCPU(args.llm_cpu))
         .insert_resource(Seed(args.seed.clone()))
         .insert_resource(GameState::new(2))
         .insert_resource::<Random<RandomRng>>(Random(None))
