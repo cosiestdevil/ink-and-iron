@@ -376,6 +376,8 @@ fn startup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut random: ResMut<Random<ChaCha20Rng>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: ResMut<AssetServer>,
+    mut contexts: EguiContexts,
 ) {
     let scale = world_map.scale;
 
@@ -413,14 +415,14 @@ fn startup(
                 cell: cell_id,
                 available_constructions: vec![
                     ConstructionJob::Unit(UnitConstuction {
-                        name: "Unit 1".to_string(),
+                        name: "Fighter".to_string(),
                         cost: 2.0,
                         progress: 0.0,
                         template: Box::new(UnitTemplate {
                             mesh: Mesh3d(unit_mesh),
                             material: MeshMaterial3d(player_mat.clone()),
                             unit: Unit {
-                                name: "Unit 1".to_string(),
+                                name: "Fighter".to_string(),
                                 max_health: 10.0,
                                 health: 10.0,
                                 range: 1,
@@ -431,6 +433,9 @@ fn startup(
                                 goal: None,
                                 move_timer: None,
                                 controller: player.id,
+                                icon: contexts.add_image(EguiTextureHandle::Strong(
+                                    asset_server.load("icons/fighter.png"),
+                                )),
                             },
                         }),
                     }),
@@ -606,14 +611,19 @@ fn turn_start(
                                 .find(|n| !units.iter().any(|u| u.current_cell == **n));
                             if let Some(cell) = neighbour {
                                 let pos = world_map.get_position_for_cell(*cell);
+                                let template = unit_constuction.get_template(*cell);
+                                let unit_icon = template.unit.icon;
                                 let mut unit = commands.spawn((
-                                    unit_constuction.get_template(*cell),
+                                    template,
                                     //MeshMaterial2d(materials.add(player.color)),
                                     Transform::from_translation(pos),
                                 ));
                                 unit.observe(click_unit);
-                                info!("Unit constructed!");
-                                info!("{}",player.unit_spawn_barks.pop().unwrap_or("Unit spawned!".to_string()));
+                                let bark = player
+                                    .unit_spawn_barks
+                                    .pop()
+                                    .unwrap_or("Unit spawned!".to_string());
+                                player.add_notification_with_icon(bark, unit_icon);
                                 completed_construction = true;
 
                                 settlement.construction = None;
@@ -869,6 +879,7 @@ struct Unit {
     next_cell: Option<CellId>,
     goal: Option<CellId>,
     move_timer: Option<Timer>,
+    icon: egui::TextureId,
 }
 
 #[derive(Component)]
