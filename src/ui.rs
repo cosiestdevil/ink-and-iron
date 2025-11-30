@@ -2,6 +2,7 @@ use bevy::camera::{Viewport, visibility::RenderLayers};
 use bevy::prelude::*;
 use bevy::render::render_resource::BlendState;
 use bevy::window::PrimaryWindow;
+use bevy_egui::egui::{ScrollArea, Stroke};
 use bevy_egui::{
     EguiContext, EguiContexts, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass,
     PrimaryEguiContext, egui,
@@ -52,12 +53,54 @@ fn ui_example_system(
     mut settlements: Query<&mut SettlementCenter>,
     mut units: Query<&mut Unit>,
     mut turn_start: MessageWriter<TurnStart>,
+    time: Res<Time>,
 ) -> Result {
     let ctx = contexts.ctx_mut()?;
 
     let mut left = egui::SidePanel::left("left_panel")
         .resizable(true)
         .show(ctx, |ui| {
+            egui::TopBottomPanel::bottom("my_side_panel_bottom")
+                .exact_height(ui.available_height() / 5.0)
+                .show_inside(ui, |ui| {
+                    ScrollArea::vertical().show(ui, |ui| {
+                        ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
+                            let active_player = game_state.active_player;
+                            let player = game_state.players.get_mut(&active_player).unwrap();
+                            let mut remove_indices = vec![];
+                            for (i, notification) in player.notifications.iter_mut().enumerate().rev() {
+                                notification.timer.tick(time.delta());
+                                if notification.timer.is_finished() {
+                                    remove_indices.push(i);
+                                } else {
+                                    ui.add_space(4.0);
+                                    egui::Frame::default()
+                                        .stroke(Stroke::new(1.0, egui::Color32::LIGHT_GRAY))
+                                        .inner_margin(4.0)
+                                        .show(ui, |ui| {
+                                            ui.horizontal(|ui| {
+                                                if let Some(icon) = notification.icon.as_ref() {
+                                                    ui.add(egui::widgets::Image::new(
+                                                        egui::load::SizedTexture::new(
+                                                            *icon,
+                                                            [32.0, 32.0],
+                                                        ),
+                                                    ));
+                                                }
+                                                ui.label(&notification.message);
+                                            });
+                                        });
+                                        
+                                }
+                            }
+                            // Remove finished notifications
+                            for &i in remove_indices.iter().rev() {
+                                player.notifications.remove(i);
+                            }
+                        });
+                    });
+                });
+
             ui.label("Left resizeable panel");
             match *selected {
                 Selection::None => {}

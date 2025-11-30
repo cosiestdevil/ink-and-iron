@@ -1,19 +1,23 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![allow(clippy::too_many_arguments)]
-use std::{collections::HashMap, path::Path, time::Duration};
+use std::{
+    collections::{HashMap, VecDeque},
+    path::Path,
+    time::Duration,
+};
 
 use crate::{
     generate::{CellId, WorldMap, WorldType},
     llm::SettlementNameCtx,
 };
 use bevy::{
-    camera::Exposure, input_focus::InputFocus, light::AtmosphereEnvironmentMapLight,
-    log::LogPlugin, math::bounding::Aabb2d, pbr::Atmosphere, post_process::bloom::Bloom,
-    prelude::*,
+    camera::Exposure, input_focus::InputFocus,
+    light::AtmosphereEnvironmentMapLight, log::LogPlugin, math::bounding::Aabb2d, pbr::Atmosphere,
+    post_process::bloom::Bloom, prelude::*,
 };
 use bevy_easings::{Ease, EasingsPlugin};
 use bevy_egui::{
-    EguiContext,
+    EguiContext, EguiContexts, EguiTextureHandle,
     egui::{self, Response, Ui},
 };
 use bevy_kira_audio::prelude::*;
@@ -120,6 +124,7 @@ fn main() -> anyhow::Result<()> {
                 deselect,
                 reset_turn_ready_to_end,
                 move_sun,
+                debug_notification,
             )
                 .run_if(in_state(AppState::InGame)),
         )
@@ -535,6 +540,19 @@ fn reset_turn_ready_to_end(
         game_state.turn_ready_to_end = false;
     }
 }
+
+fn debug_notification(
+    input: Res<ButtonInput<KeyCode>>,
+    mut game_state: ResMut<GameState>,
+    time: Res<Time>,
+) {
+    if input.just_pressed(KeyCode::KeyN) {
+        let active_player = game_state.active_player;
+        let player = game_state.players.get_mut(&active_player).unwrap();
+        player.add_notification(format!("This is a test notification! {:?}", time.elapsed()));
+    }
+}
+
 fn turn_start(
     mut commands: Commands,
     mut cameras: Query<(&mut Camera, Entity, &mut RtsCameraControls), Without<EguiContext>>,
@@ -629,6 +647,28 @@ struct Player {
     settlement_names: Vec<String>,
     settlement_context: SettlementNameCtx,
     unit_spawn_barks: Vec<String>,
+    notifications: VecDeque<Notification>,
+}
+impl Player {
+    fn add_notification(&mut self, message: String) {
+        self.notifications.push_back(Notification {
+            message,
+            icon: None,
+            timer: Timer::from_seconds(5.0, TimerMode::Once),
+        });
+    }
+    fn add_notification_with_icon(&mut self, message: String, icon: egui::TextureId) {
+        self.notifications.push_back(Notification {
+            message,
+            icon: Some(icon),
+            timer: Timer::from_seconds(5.0, TimerMode::Once),
+        });
+    }
+}
+struct Notification {
+    pub message: String,
+    pub timer: Timer,
+    pub icon: Option<egui::TextureId>,
 }
 #[derive(Resource)]
 struct GameState {
@@ -654,6 +694,7 @@ impl GameState {
                 camera_entity: None,
                 color,
                 unit_spawn_barks: vec![],
+                notifications: VecDeque::new(),
             };
             players.insert(player.id, player);
         }
