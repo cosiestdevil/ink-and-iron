@@ -116,19 +116,33 @@ fn _settlement_names(ops: &LLMOps, tx: Sender<Vec<String>>, ctx: SettlementNameC
     info!("Called settlement names");
 }
 static LLM: OnceCell<(LLMOps, Library)> = OnceCell::const_new();
-pub async fn get_llm() -> &'static LLMOps {
-    let a = LLM.get_or_init(async || load_llm().unwrap());
+pub async fn get_llm(force_cpu:bool) -> &'static LLMOps {
+    let a = LLM.get_or_init(async || load_llm(force_cpu).unwrap());
     &a.await.0
 }
 
-fn load_llm() -> anyhow::Result<(LLMOps, Library)> {
+#[cfg(target_os = "windows")]
+const PRIMARY_LIBRARY:&str = "llm_provider_cuda.dll";
+#[cfg(target_os = "linux")]
+const PRIMARY_LIBRARY:&str = "libllm_provider_cuda.so";
+#[cfg(target_os = "windows")]
+const CPU_LIBRARY:&str = "llm_provider.dll";
+#[cfg(target_os = "linux")]
+const CPU_LIBRARY:&str = "libllm_provider.so";
+
+fn load_llm(force_cpu:bool) -> anyhow::Result<(LLMOps, Library)> {
     unsafe {
-        let mut lib = libloading::Library::new("llm_provider_cuda");
-        if let Err(_err) = lib {
-            info!("Cuda load failed, falling back to CPU LLM");
-            lib = libloading::Library::new("llm_provider");
-        }
-        let lib = lib?;
+        let lib =  if force_cpu{
+            libloading::Library::new(CPU_LIBRARY)?
+        }else{
+            let mut lib = libloading::Library::new(PRIMARY_LIBRARY);
+            if let Err(_err) = lib {
+                info!("Primary load failed, falling back to CPU LLM");
+                lib = libloading::Library::new(CPU_LIBRARY);
+            
+            }
+            lib?
+        };
         info!("Found Library");
         let func: libloading::Symbol<llm_api::CreateFn> = lib.get(b"create_llm_provider")?;
         info!("Found Create Function");
