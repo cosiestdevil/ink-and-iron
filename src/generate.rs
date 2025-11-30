@@ -11,7 +11,7 @@ use rand::Rng;
 use std::{collections::HashMap, ops::Deref};
 pub use world_generation::*;
 
-use crate::{AppState, Cell, CellHighlight, GameState, Random, Selection, Unit, llm};
+use crate::{AppState, Cell, CellHighlight, GameState, LLMCPU, Random, Selection, Unit, llm};
 #[derive(Resource, Default)]
 pub struct WorldMap(pub Option<world_generation::WorldMap>);
 
@@ -84,14 +84,18 @@ fn generate_unit_spawn_barks(
     mut rng: ResMut<Random<crate::RandomRng>>,
     runtime: ResMut<TokioTasksRuntime>,
     game_state: Res<GameState>,
+    llm_cpu:Res<LLMCPU>
 ) {
     let temp = rng.0.as_mut().unwrap().random_range(0.3..0.5);
+    let llm_cpu = llm_cpu.0;
     for player in game_state.players.values() {
         let civ_name = player.settlement_context.civilisation_name.clone();
         let unit_type = "Warrior".to_string(); // TODO: get from context
         let player_id = player.id;
+
         runtime.spawn_background_task(move |mut ctx| async move {
             if let Ok(barks) = llm::unit_spawn_barks(
+                llm_cpu,
                 UnitSpawnBarkCtx {
                     civilisation_name: civ_name,
                     unit_type,
@@ -130,13 +134,16 @@ fn generate_settlement_name(
     mut rng: ResMut<Random<crate::RandomRng>>,
     runtime: ResMut<TokioTasksRuntime>,
     game_state: Res<GameState>,
+    llm_cpu:Res<LLMCPU>
 ) {
     let temp = rng.0.as_mut().unwrap().random_range(0.3..0.5);
+    let llm_cpu = llm_cpu.0;
     for player in game_state.players.values() {
         let civ_name = player.settlement_context.civilisation_name.clone();
         let player_id = player.id;
         runtime.spawn_background_task(move |mut ctx| async move {
             if let Ok(names) = llm::settlement_names(
+                llm_cpu,
                 SettlementNameCtx {
                     civilisation_name: civ_name,
                 },

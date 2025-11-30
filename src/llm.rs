@@ -9,16 +9,16 @@ use tokio::sync::{
     oneshot::{self, Sender},
 };
 
-pub async fn unit_spawn_barks(ctx:UnitSpawnBarkCtx,temp:f32) -> anyhow::Result<Vec<String>> {
-    let ops = get_llm().await;
+pub async fn unit_spawn_barks(force_cpu:bool,ctx:UnitSpawnBarkCtx,temp:f32) -> anyhow::Result<Vec<String>> {
+    let ops = get_llm(force_cpu).await;
     let (tx, rx) = oneshot::channel();
     _unit_spawn_barks(ops, tx, ctx, temp);
     let res = rx.await?;
     Ok(res)
 }
 
-pub async fn settlement_names(ctx: SettlementNameCtx, temp: f32) -> anyhow::Result<Vec<String>> {
-    let ops = get_llm().await;
+pub async fn settlement_names(force_cpu:bool,ctx: SettlementNameCtx, temp: f32) -> anyhow::Result<Vec<String>> {
+    let ops = get_llm(force_cpu).await;
     let (tx, rx) = oneshot::channel();
     _settlement_names(ops, tx, ctx, temp);
     let res = rx.await?;
