@@ -55,7 +55,7 @@ struct Args {
     #[arg(long)]
     seed: Option<String>,
     #[arg(long, default_value_t = WorldType::Default)]
-    world_type:WorldType,
+    world_type: WorldType,
 }
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
 pub(crate) enum AppState {

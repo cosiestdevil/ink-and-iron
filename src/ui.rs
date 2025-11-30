@@ -41,6 +41,7 @@ fn setup_ui_camera(mut commands: Commands, mut egui_global_settings: ResMut<Egui
         },
     ));
 }
+
 // This function runs every frame. Therefore, updating the viewport after drawing the gui.
 // With a resource which stores the dimensions of the panels, the update of the Viewport can
 // be done in another system.
@@ -120,6 +121,7 @@ fn ui_example_system(
                     }
                 }
             }
+
             ui.allocate_rect(ui.available_rect_before_wrap(), egui::Sense::hover());
         })
         .response
@@ -156,7 +158,11 @@ fn ui_example_system(
                         let unit = units.get_mut(entity).unwrap();
                         ui.label(unit.name.clone());
                         ui.label(format!("Speed: {}/{}", unit.used_speed, unit.speed));
-                        ui.label(format!("Health: {:.0}/{:.0}", unit.health.ceil(), unit.max_health.ceil()));
+                        ui.label(format!(
+                            "Health: {:.0}/{:.0}",
+                            unit.health.ceil(),
+                            unit.max_health.ceil()
+                        ));
                     }
                     Selection::Settlement(_entity) => {}
                 }
