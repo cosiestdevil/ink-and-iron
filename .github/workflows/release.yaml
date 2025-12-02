@@ -34,6 +34,7 @@ jobs:
         uses: Jimver/cuda-toolkit@v0.2.29
         with:
           cuda: '12.9.0'
+          method: network
       - name: Compute version (inline)
         id: version
         shell: bash
@@ -43,9 +44,9 @@ jobs:
       - name: Cargo build (release)
         run: cargo build --package llm-provider-cuda --release
       - name: Collect build outputs
-        uses: actions/cache@v4
+        uses: actions/upload-artifact@v4
         with:
-          key: ${{steps.version.outputs.tag}}-linux-llm-cuda
+          name: ${{steps.version.outputs.tag}}-linux-llm-cuda
           path: |
             target/libllm-provider-cuda.so
   build-linux-llm-cpu:
@@ -69,9 +70,9 @@ jobs:
       - name: Cargo build (release)
         run: cargo build --package llm-provider-cpu --release
       - name: Collect build outputs
-        uses: actions/cache@v4
+        uses: actions/upload-artifact@v4
         with:
-          key: ${{steps.version.outputs.tag}}-linux-llm-cpu
+          name: ${{steps.version.outputs.tag}}-linux-llm-cpu
           path: |
             target/libllm-provider-cpu.so
   build-linux-bin:
@@ -84,6 +85,8 @@ jobs:
           fetch-tags: true
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: Install Dependencies
+        run: sudo apt-get update; sudo apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev libxkbcommon-x11-0 libwayland-dev
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
       - name: Compute version (inline)
@@ -98,9 +101,9 @@ jobs:
       - name: Cargo build (release)
         run: cargo build --release
       - name: Collect build outputs
-        uses: actions/cache@v4
+        uses: actions/upload-artifact@v4
         with:
-          key: ${{steps.version.outputs.tag}}-linux-bin
+          name: ${{steps.version.outputs.tag}}-linux-bin
           path: |
             target/{{env.ARTIFACT_BASENAME}}
   build-windows-llm-cuda:
@@ -130,9 +133,9 @@ jobs:
       - name: Cargo build (release)
         run: cargo build --package llm-provider-cuda --release
       - name: Collect build outputs
-        uses: actions/cache@v4
+        uses: actions/upload-artifact@v4
         with:
-          key: ${{steps.version.outputs.tag}}-windows-llm-cuda
+          name: ${{steps.version.outputs.tag}}-windows-llm-cuda
           path: |
             target/llm-provider-cuda.dll
   build-windows-llm-cpu:
@@ -158,9 +161,9 @@ jobs:
       - name: Cargo build (release)
         run: cargo build --package llm-provider-cpu --release
       - name: Collect build outputs
-        uses: actions/cache@v4
+        uses: actions/upload-artifact@v4
         with:
-          key: ${{steps.version.outputs.tag}}-windows-llm-cpu
+          name: ${{steps.version.outputs.tag}}-windows-llm-cpu
           path: |
             target/llm-provider-cpu.dll
   build-windows-bin:
@@ -192,9 +195,9 @@ jobs:
         run: cargo build --release
 
       - name: Collect build outputs
-        uses: actions/cache@v4
+        uses: actions/upload-artifact@v4
         with:
-          key: ${{steps.version.outputs.tag}}-windows-bin
+          name: ${{steps.version.outputs.tag}}-windows-bin
           path: |
             target/{{env.ARTIFACT_BASENAME}}.exe
 
@@ -219,24 +222,11 @@ jobs:
           pip install -U "huggingface_hub"
       - name: Download models
         run: ./download_models.sh
-      - name: Collect linux llm cuda
-        uses: actions/cache@v4
+      - uses: actions/download-artifact@v5
         with:
-          key: ${{steps.version.outputs.tag}}-linux-llm-cuda
-          path: |
-            target/libllm-provider-cuda.so
-      - name: Collect linux llm cpu
-        uses: actions/cache@v4
-        with:
-          key: ${{steps.version.outputs.tag}}-linux-llm-cpu
-          path: |
-            target/libllm-provider-cpu.so
-      - name: Collect linux bin
-        uses: actions/cache@v4
-        with:
-          key: ${{steps.version.outputs.tag}}-linux-bin
-          path: |
-            target/${{env.ARTIFACT_BASENAME}}
+          path: target
+          pattern: ${{steps.version.outputs.tag}}-linux-*
+          merge-multiple: true
       - name: Prepare files
         id: collect
         run: |
@@ -244,9 +234,9 @@ jobs:
           mv credits target/credits
           zip -r ${{env.ARTIFACT_BASENAME}}-linux.zip target/
       - name: Collect linux bin
-        uses: actions/cache@v4
+        uses: actions/upload-artifact@v4
         with:
-          key: ${{steps.version.outputs.tag}}-linux-release
+          name: ${{steps.version.outputs.tag}}-linux-release
           path: |
             ${{env.ARTIFACT_BASENAME}}-linux.zip
   build-windows-release:
@@ -270,24 +260,11 @@ jobs:
           pip install -U "huggingface_hub"
       - name: Download models
         run: ./download_models.sh
-      - name: Collect windows llm cuda
-        uses: actions/cache@v4
+      - uses: actions/download-artifact@v5
         with:
-          key: ${{steps.version.outputs.tag}}-windows-llm-cuda
-          path: |
-            target/llm-provider-cuda.dll
-      - name: Collect windows llm cpu
-        uses: actions/cache@v4
-        with:
-          key: ${{steps.version.outputs.tag}}-windows-llm-cpu
-          path: |
-            target/llm-provider-cpu.dll
-      - name: Collect windows bin
-        uses: actions/cache@v4
-        with:
-          key: ${{steps.version.outputs.tag}}-windows-bin
-          path: |
-            target/${{env.ARTIFACT_BASENAME}}.exe
+          path: target
+          pattern: ${{steps.version.outputs.tag}}-windows-*
+          merge-multiple: true
       - name: Prepare files
         id: collect
         run: |
@@ -295,9 +272,9 @@ jobs:
           mv credits target/credits
           zip -r ${{env.ARTIFACT_BASENAME}}-windows.zip target/
       - name: Collect windows bin
-        uses: actions/cache@v4
+        uses: actions/upload-artifact@v4
         with:
-          key: ${{steps.version.outputs.tag}}-windows-release
+          name: ${{steps.version.outputs.tag}}-windows-release
           path: |
             ${{env.ARTIFACT_BASENAME}}-windows.zip
   create-release:
@@ -321,6 +298,10 @@ jobs:
         with:
           config: cliff.toml
           args: --unreleased --tag ${{steps.version.outputs.tag}} --strip header
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: ${{steps.version.outputs.tag}}-*-release
+          merge-multiple: true
       - name: Upload asset & create/update release
         uses: svenstaro/upload-release-action@v2
         with:
