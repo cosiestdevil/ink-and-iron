@@ -48,7 +48,7 @@ jobs:
         with:
           name: ${{steps.version.outputs.tag}}-linux-llm-cuda
           path: |
-            target/libllm-provider-cuda.so
+            target/release/libllm-provider-cuda.so
   build-linux-llm-cpu:
     runs-on: ubuntu-latest
     steps:
@@ -74,7 +74,7 @@ jobs:
         with:
           name: ${{steps.version.outputs.tag}}-linux-llm-cpu
           path: |
-            target/libllm-provider-cpu.so
+           target/release/libllm-provider-cpu.so
   build-linux-bin:
     runs-on: ubuntu-latest
     steps:
@@ -105,7 +105,7 @@ jobs:
         with:
           name: ${{steps.version.outputs.tag}}-linux-bin
           path: |
-            target/{{env.ARTIFACT_BASENAME}}
+            target/release/${{env.ARTIFACT_BASENAME}}
   build-windows-llm-cuda:
     runs-on: windows-latest
     steps:
@@ -137,7 +137,7 @@ jobs:
         with:
           name: ${{steps.version.outputs.tag}}-windows-llm-cuda
           path: |
-            target/llm-provider-cuda.dll
+            target/release/llm-provider-cuda.dll
   build-windows-llm-cpu:
     runs-on: windows-latest
     steps:
@@ -165,7 +165,7 @@ jobs:
         with:
           name: ${{steps.version.outputs.tag}}-windows-llm-cpu
           path: |
-            target/llm-provider-cpu.dll
+            target/release/llm-provider-cpu.dll
   build-windows-bin:
     runs-on: windows-latest
     steps:
@@ -199,7 +199,7 @@ jobs:
         with:
           name: ${{steps.version.outputs.tag}}-windows-bin
           path: |
-            target/{{env.ARTIFACT_BASENAME}}.exe
+            target/release/${{env.ARTIFACT_BASENAME}}.exe
 
   build-linux-release:
     runs-on: ubuntu-latest
