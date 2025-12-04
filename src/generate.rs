@@ -11,7 +11,7 @@ use rand::Rng;
 use std::{collections::HashMap, ops::Deref};
 pub use world_generation::*;
 
-use crate::{AppState, Cell, CellHighlight, GameState, LLMCPU, Random, Selection, Unit, llm};
+use crate::{AppState, Cell, CellHighlight, GameState, LlmCpu, Random, Selection, Unit, llm};
 #[derive(Resource, Default)]
 pub struct WorldMap(pub Option<world_generation::WorldMap>);
 
@@ -84,7 +84,7 @@ fn generate_unit_spawn_barks(
     mut rng: ResMut<Random<crate::RandomRng>>,
     runtime: ResMut<TokioTasksRuntime>,
     game_state: Res<GameState>,
-    llm_cpu:Res<LLMCPU>
+    llm_cpu:Res<LlmCpu>
 ) {
     let temp = rng.0.as_mut().unwrap().random_range(0.3..0.5);
     let llm_cpu = llm_cpu.0;
@@ -134,7 +134,7 @@ fn generate_settlement_name(
     mut rng: ResMut<Random<crate::RandomRng>>,
     runtime: ResMut<TokioTasksRuntime>,
     game_state: Res<GameState>,
-    llm_cpu:Res<LLMCPU>
+    llm_cpu:Res<LlmCpu>
 ) {
     let temp = rng.0.as_mut().unwrap().random_range(0.3..0.5);
     let llm_cpu = llm_cpu.0;

@@ -70,7 +70,7 @@ pub(crate) enum AppState {
 mod logs;
 mod menu;
 #[derive(Resource)]
-struct LLMCPU(bool);
+struct LlmCpu(bool);
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     App::new()
@@ -104,7 +104,7 @@ fn main() -> anyhow::Result<()> {
         .init_state::<AppState>()
         .init_resource::<InputFocus>()
         .init_resource::<crate::pathfinding::PathFinding>()
-        .insert_resource(LLMCPU(args.llm_cpu))
+        .insert_resource(LlmCpu(args.llm_cpu))
         .insert_resource(Seed(args.seed.clone()))
         .insert_resource(GameState::new(2))
         .insert_resource::<Random<RandomRng>>(Random(None))
