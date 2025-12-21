@@ -69,7 +69,9 @@ fn ui_example_system(
                             let active_player = game_state.active_player;
                             let player = game_state.players.get_mut(&active_player).unwrap();
                             let mut remove_indices = vec![];
-                            for (i, notification) in player.notifications.iter_mut().enumerate().rev() {
+                            for (i, notification) in
+                                player.notifications.iter_mut().enumerate().rev()
+                            {
                                 notification.timer.tick(time.delta());
                                 if notification.timer.is_finished() {
                                     remove_indices.push(i);
@@ -91,7 +93,6 @@ fn ui_example_system(
                                                 ui.label(&notification.message);
                                             });
                                         });
-                                        
                                 }
                             }
                             // Remove finished notifications
@@ -101,8 +102,9 @@ fn ui_example_system(
                         });
                     });
                 });
-
-            ui.label("Left resizeable panel");
+            let active_player = game_state.active_player;
+            let player = game_state.players.get_mut(&active_player).unwrap();
+            ui.label(player.civ.name.clone());
             match *selected {
                 Selection::None => {}
                 Selection::Unit(_entity) => {}
