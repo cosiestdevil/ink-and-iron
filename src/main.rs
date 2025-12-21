@@ -106,7 +106,7 @@ fn main() -> anyhow::Result<()> {
         .init_resource::<crate::pathfinding::PathFinding>()
         .insert_resource(LlmCpu(args.llm_cpu))
         .insert_resource(Seed(args.seed.clone()))
-        .insert_resource(GameState::new(2))
+        //.insert_resource(GameState::new(2))
         .insert_resource::<Random<RandomRng>>(Random(None))
         .insert_resource(Selection::None)
         .insert_resource::<generate::WorldGenerationParams>((&args).into())

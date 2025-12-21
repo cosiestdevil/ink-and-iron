@@ -5,7 +5,7 @@ use bevy_egui::{
 };
 use bevy_kira_audio::{AudioChannel, AudioControl};
 
-use crate::{AppState, AudioSettings, Music};
+use crate::{AppState, AudioSettings, GameState, Music};
 pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
@@ -97,14 +97,17 @@ fn main_menu(
 }
 
 fn new_game_menu(
+    mut commands: Commands,
     mut contexts: EguiContexts,
     mut next_state: ResMut<NextState<AppState>>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
     mut params: ResMut<crate::generate::WorldGenerationParams>,
     mut temp_params: Local<Option<world_generation::WorldGenerationParams>>,
+    mut player_count: Local<Option<u8>>,
 ) {
     let ctx = contexts.ctx_mut().unwrap();
     let temp_params = temp_params.get_or_insert_with(|| params.0.unwrap());
+    let player_count = player_count.get_or_insert_with(|| 1);
     egui::CentralPanel::default().show(ctx, |_ui| {});
     egui::Area::new("main_menu".into())
         .anchor(Align2::CENTER_CENTER, egui::vec2(MENU_OFFSET_X, 0.0))
@@ -127,10 +130,18 @@ fn new_game_menu(
                             world_generation::WorldType::Flat,
                             "Flat",
                         );
-                    });                   
+                    });
                 ui.add_space(4.0);
+                let slider = egui::Slider::new(
+                    player_count, // or your actual field name
+                    1..=4,
+                )
+                .clamping(egui::SliderClamping::Always)
+                .text("Player Count");
+                ui.add(slider);
                 if ui.button("Start").clicked() {
                     params.0 = Some(*temp_params);
+                    commands.insert_resource(GameState::new(*player_count as usize));
                     next_state.set(AppState::Generating);
                 }
                 ui.add_space(4.0);
