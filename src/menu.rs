@@ -105,10 +105,12 @@ fn new_game_menu(
     mut temp_params: Local<Option<world_generation::WorldGenerationParams>>,
     mut player_count: Local<Option<u8>>,
     civs: Res<Assets<Civilisation>>,
+    mut selected_civs: Local<Option<Vec<Option<AssetId<Civilisation>>>>>,
 ) {
     let ctx = contexts.ctx_mut().unwrap();
     let temp_params = temp_params.get_or_insert_with(|| params.0.unwrap());
     let player_count = player_count.get_or_insert_with(|| 1);
+    let selected_civs = selected_civs.get_or_insert_with(|| vec![None,None,None,None]);
     egui::CentralPanel::default().show(ctx, |_ui| {});
     egui::Area::new("main_menu".into())
         .anchor(Align2::CENTER_CENTER, egui::vec2(MENU_OFFSET_X, 0.0))
@@ -140,6 +142,25 @@ fn new_game_menu(
                 .clamping(egui::SliderClamping::Always)
                 .text("Player Count");
                 ui.add(slider);
+                ui.add_space(4.0);
+                for i in 0..*player_count {
+                    let selected_civ = selected_civs.get(i as usize);
+                    egui::ComboBox::from_label(format!("Player {} Civ",i+1))
+                        .selected_text(if let Some(selected_civ) = selected_civ.unwrap() {
+                            &civs.get(*selected_civ).unwrap().name
+                        } else {
+                            "Select Civ"
+                        })
+                        .show_ui(ui, |ui| {
+                            for (civ_id, civ) in civs.iter() {
+                                ui.selectable_value(
+                                    selected_civs.get_mut(i as usize).unwrap(),
+                                    Some(civ_id),
+                                    civ.name.clone(),
+                                );
+                            }
+                        });
+                }
                 if ui.button("Start").clicked() {
                     params.0 = Some(*temp_params);
                     commands.insert_resource(GameState::new(
