@@ -1454,8 +1454,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_rts_camera"
-version = "0.11.1"
-source = "git+https://github.com/cosiestdevil/bevy_rts_camera.git?branch=viewport_panning#54af148274eb21de8b6cacddaf6ab21cf7797e78"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6925a430d8aadf80bf154ecf38c6590a69d3b1561ba537fac1caf2c6d8b24f96"
 dependencies = [
  "bevy",
 ]

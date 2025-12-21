@@ -37,7 +37,7 @@ libloading = "0.8.9"
 
 #bevy_panorbit_camera = { version = "0.33.0", features = ["bevy_egui"] }
 tracing-appender = "0.2.3"
-bevy_rts_camera = { version = "0.11.1", git="https://github.com/cosiestdevil/bevy_rts_camera.git", branch = "viewport_panning"}
+bevy_rts_camera = { version = "0.12"}
 chrono = "0.4.42"
 zip = "6.0.0"
 bevy-persistent = { version = "0.9.0", features = ["toml"] }
