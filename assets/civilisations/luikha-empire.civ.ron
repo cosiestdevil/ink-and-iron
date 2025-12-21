@@ -1,0 +1,8 @@
+Civilisation(
+    name: "Luikha Empire",
+    units: [
+        (name: "Fighter", default_cost:2.0, health:10.0,range:1,speed:5.0,mesh_path:"meshes/fighter.glb",icon_path:"icons/fighter.png"),
+        (name: "Archer", default_cost:3.0, health:8.0,range:2,speed:5.0,mesh_path:"meshes/archer.glb",icon_path:"icons/ranger.png"),
+        (name: "Mage", default_cost:4.0, health:6.0,range:2,speed:5.0,mesh_path:"meshes/mage.glb",icon_path:"icons/wizard.png"),
+    ],
+)
