@@ -11,9 +11,7 @@ use crate::{
     llm::SettlementNameCtx,
 };
 use bevy::{
-    camera::Exposure, input_focus::InputFocus,
-    light::AtmosphereEnvironmentMapLight, log::LogPlugin, math::bounding::Aabb2d, pbr::Atmosphere,
-    post_process::bloom::Bloom, prelude::*,
+    asset::{AssetLoader, LoadContext, LoadedFolder, io::Reader, ron}, camera::Exposure, input_focus::InputFocus, light::AtmosphereEnvironmentMapLight, log::LogPlugin, math::bounding::Aabb2d, pbr::Atmosphere, post_process::bloom::Bloom, prelude::*
 };
 use bevy_easings::{Ease, EasingsPlugin};
 use bevy_egui::{
@@ -30,6 +28,8 @@ use colorgrad::Gradient;
 use num::Num;
 use rand::{Rng, SeedableRng, distr::Uniform};
 use rand_chacha::ChaCha20Rng;
+use serde::Deserialize;
+use thiserror::Error;
 mod generate;
 mod llm;
 mod pathfinding;
@@ -101,9 +101,12 @@ fn main() -> anyhow::Result<()> {
         .add_plugins(crate::generate::WorldPlugin)
         .add_plugins(crate::menu::MenuPlugin)
         .add_message::<TurnStart>()
+        .init_asset::<Civilisation>()
+        .init_asset_loader::<CivilisationAssetLoader>()
         .init_state::<AppState>()
         .init_resource::<InputFocus>()
         .init_resource::<crate::pathfinding::PathFinding>()
+        .init_resource::<LoadedFolders>()
         .insert_resource(LlmCpu(args.llm_cpu))
         .insert_resource(Seed(args.seed.clone()))
         //.insert_resource(GameState::new(2))
@@ -112,7 +115,7 @@ fn main() -> anyhow::Result<()> {
         .insert_resource::<generate::WorldGenerationParams>((&args).into())
         .add_systems(
             Startup,
-            (load_settings, startup_screens, setup_rng, archive_old_logs),
+            (load_settings, startup_screens, setup_rng, archive_old_logs,load_civs),
         )
         .add_systems(
             Update,
@@ -143,6 +146,13 @@ fn main() -> anyhow::Result<()> {
         )
         .run();
     Ok(())
+}
+#[derive(Resource,Default)]
+struct LoadedFolders{
+    civs:Option<Handle<LoadedFolder>>
+}
+fn load_civs(asset_server:Res<AssetServer>,mut folders:ResMut<LoadedFolders>){
+    folders.civs = Some(asset_server.load_folder("civilisations"));
 }
 fn load_settings(mut commands: Commands) {
     let config_dir = dirs::config_dir().unwrap().join(env!("CARGO_PKG_NAME"));
@@ -684,6 +694,103 @@ struct Notification {
     pub message: String,
     pub timer: Timer,
     pub icon: Option<egui::TextureId>,
+}
+
+#[derive(TypePath, Debug, Deserialize, Clone, Asset)]
+struct Civilisation {
+    pub name: String,
+    pub units: Vec<UnitType>,
+}
+#[derive(Default)]
+struct CivilisationAssetLoader;
+
+/// Possible errors that can be produced by [`CivilisationAssetLoader`]
+#[non_exhaustive]
+#[derive(Debug, Error)]
+enum CivilisationAssetLoaderError {
+    /// An [IO](std::io) Error
+    #[error("Could not load asset: {0}")]
+    Io(#[from] std::io::Error),
+    /// A [RON](ron) Error
+    #[error("Could not parse RON: {0}")]
+    RonSpannedError(#[from] ron::error::SpannedError),
+}
+
+impl AssetLoader for CivilisationAssetLoader {
+    type Asset = Civilisation;
+    type Settings = ();
+    type Error = CivilisationAssetLoaderError;
+    async fn load(
+        &self,
+        reader: &mut dyn Reader,
+        _settings: &(),
+        _load_context: &mut LoadContext<'_>,
+    ) -> Result<Self::Asset, Self::Error> {
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes).await?;
+        let custom_asset = ron::de::from_bytes::<Civilisation>(&bytes)?;
+        Ok(custom_asset)
+    }
+
+    fn extensions(&self) -> &[&str] {
+        &["civ.ron"]
+    }
+}
+
+#[derive(Debug, Deserialize, Clone)]
+struct UnitType {
+    pub name: String,
+    pub default_cost: f32,
+    pub health: f32,
+    pub range: usize,
+    pub speed: f32,
+    pub mesh_path: String,
+    pub icon_path: String,
+}
+
+impl UnitType {
+    fn to_construction(
+        &self,
+        controller: PlayerId,
+        cell: CellId,
+        asset_server: &AssetServer,
+        contexts: &mut EguiContexts,
+        material: MeshMaterial3d<StandardMaterial>,
+    ) -> UnitConstuction {
+        UnitConstuction {
+            cost: self.default_cost,
+            progress: 0.0,
+            template: Box::new(UnitTemplate {
+                unit: Unit {
+                    name: self.name.clone(),
+                    max_health: self.health,
+                    health: self.health,
+                    range: self.range,
+                    controller,
+                    speed: self.speed,
+                    used_speed: 0.0,
+                    current_cell: cell,
+                    next_cell: None,
+                    goal: None,
+                    move_timer: None,
+                    icon: contexts.add_image(EguiTextureHandle::Strong(
+                        asset_server.load(self.icon_path.clone()),
+                    )),
+                },
+                mesh: Mesh3d(
+                    asset_server.load(
+                        GltfAssetLabel::Primitive {
+                            mesh: 0,
+                            primitive: 0,
+                        }
+                        .from_asset(self.mesh_path.clone()),
+                    ),
+                ),
+                material,
+            }),
+            name: self.name.clone(),
+        }
+    }
 }
 #[derive(Resource)]
 struct GameState {
