@@ -414,10 +414,10 @@ fn startup(
             let pos = world_map.get_position_for_cell(cell_id);
             let player_mat = materials.add(player.color);
             let settlement_mesh = meshes.add(Cuboid::from_length(world_map.entity_scale));
-            let unit_mesh = meshes.add(Cylinder::new(
-                world_map.entity_scale,
-                world_map.entity_scale,
-            ));
+            // let unit_mesh = meshes.add(Cylinder::new(
+            //     world_map.entity_scale,
+            //     world_map.entity_scale,
+            // ));
             let name = player
                 .settlement_names
                 .pop()
@@ -428,37 +428,51 @@ fn startup(
                 production: 1.0,
                 construction: None,
                 cell: cell_id,
-                available_constructions: vec![
-                    ConstructionJob::Unit(UnitConstuction {
-                        name: "Fighter".to_string(),
-                        cost: 2.0,
-                        progress: 0.0,
-                        template: Box::new(UnitTemplate {
-                            mesh: Mesh3d(unit_mesh),
-                            material: MeshMaterial3d(player_mat.clone()),
-                            unit: Unit {
-                                name: "Fighter".to_string(),
-                                max_health: 10.0,
-                                health: 10.0,
-                                range: 1,
-                                speed: 5.0,
-                                used_speed: 0.0,
-                                current_cell: cell_id,
-                                next_cell: None,
-                                goal: None,
-                                move_timer: None,
-                                controller: player.id,
-                                icon: contexts.add_image(EguiTextureHandle::Strong(
-                                    asset_server.load("icons/fighter.png"),
-                                )),
-                            },
+                available_constructions: player
+                    .civ
+                    .units
+                    .iter()
+                    .map(|u| {
+                        ConstructionJob::Unit(u.to_construction(
+                            player.id,
+                            cell_id,
+                            asset_server.as_ref(),
+                            &mut contexts,
+                            MeshMaterial3d(player_mat.clone()),
+                        ))
+                    })
+                    .chain(vec![
+                        //     ConstructionJob::Unit(UnitConstuction {
+                        //         name: "Fighter".to_string(),
+                        //         cost: 2.0,
+                        //         progress: 0.0,
+                        //         template: Box::new(UnitTemplate {
+                        //             mesh: Mesh3d(unit_mesh),
+                        //             material: MeshMaterial3d(player_mat.clone()),
+                        //             unit: Unit {
+                        //                 name: "Fighter".to_string(),
+                        //                 max_health: 10.0,
+                        //                 health: 10.0,
+                        //                 range: 1,
+                        //                 speed: 5.0,
+                        //                 used_speed: 0.0,
+                        //                 current_cell: cell_id,
+                        //                 next_cell: None,
+                        //                 goal: None,
+                        //                 move_timer: None,
+                        //                 controller: player.id,
+                        //                 icon: contexts.add_image(EguiTextureHandle::Strong(
+                        //                     asset_server.load("icons/fighter.png"),
+                        //                 )),
+                        //             },
+                        //         }),
+                        //     }),
+                        ConstructionJob::Sink(SinkConstuction {
+                            cost: 5.0,
+                            progress: 0.0,
                         }),
-                    }),
-                    ConstructionJob::Sink(SinkConstuction {
-                        cost: 5.0,
-                        progress: 0.0,
-                    }),
-                ],
+                    ])
+                    .collect::<Vec<_>>(),
             };
             let camera_entity = commands
                 .spawn((
@@ -673,6 +687,7 @@ struct Player {
     settlement_context: SettlementNameCtx,
     unit_spawn_barks: Vec<String>,
     notifications: VecDeque<Notification>,
+    civ: Civilisation,
 }
 impl Player {
     fn add_notification(&mut self, message: String) {
@@ -799,9 +814,8 @@ struct GameState {
     turn_ready_to_end: bool,
 }
 impl GameState {
-    fn new(player_count: usize) -> Self {
+    fn new(player_count: usize, civs: Vec<Civilisation>) -> Self {
         let mut players = HashMap::with_capacity(player_count);
-        let civs = ["Luikha Empire", "Ishabia Kingdom","Emerald Grove", "Infernal Horde"];
         for (i, civ) in civs.iter().take(player_count).enumerate() {
             let t = i as f32 / (player_count + 1) as f32;
             let color = Color::hsl(360.0 * t, 0.95, 0.7);
@@ -811,8 +825,9 @@ impl GameState {
                 _local: true,
                 settlement_names: vec![],
                 settlement_context: SettlementNameCtx {
-                    civilisation_name: civ.to_string(),
+                    civilisation_name: civ.name.to_string(),
                 },
+                civ: civ.clone(),
                 camera_entity: None,
                 color,
                 unit_spawn_barks: vec![],
@@ -978,7 +993,7 @@ enum Selection {
     Settlement(Entity),
 }
 
-#[derive(Component, Clone)]
+#[derive(Component, Clone, Debug)]
 struct Unit {
     name: String,
     max_health: f32,
@@ -1009,7 +1024,7 @@ trait Construction {
     fn progress(&self) -> f32;
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct UnitConstuction {
     cost: f32,
     progress: f32,
@@ -1061,7 +1076,7 @@ impl Construction for SinkConstuction {
         self.progress
     }
 }
-#[derive(Bundle, Clone)]
+#[derive(Bundle, Clone, Debug)]
 struct UnitTemplate {
     unit: Unit,
     mesh: Mesh3d,
