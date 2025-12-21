@@ -694,7 +694,7 @@ struct GameState {
 impl GameState {
     fn new(player_count: usize) -> Self {
         let mut players = HashMap::with_capacity(player_count);
-        let civs = ["Luikha Empire", "Ishabia Kingdom"];
+        let civs = ["Luikha Empire", "Ishabia Kingdom","Emerald Grove", "Infernal Horde"];
         for (i, civ) in civs.iter().take(player_count).enumerate() {
             let t = i as f32 / (player_count + 1) as f32;
             let color = Color::hsl(360.0 * t, 0.95, 0.7);
