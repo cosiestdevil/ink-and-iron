@@ -191,6 +191,7 @@ Absolutely no extra text, no explanations, no examples, no code fences.
 Content rules for each name:
 - 1-3 words.
 - In theme with the Civilisation Name
+- Based on the provided Seed Names
 - Only these characters: letters, numbers, spaces, . ! ? and (optionally) '.
 - Do not echo template tokens or placeholders (e.g., @handle, #Tag, %TOKEN%).
 - Must be UTF-8 compliant.
@@ -202,7 +203,7 @@ If any name would violate the rules, replace it with a different name that compl
         .run(serde_json::ser::to_string(&ctx)?)
         .with_sampler(params.clone());
     let names = stream.await.unwrap();
-    info!("Names Generated: {:?}", names.settlement_names);
+    println!("Names Generated: {:?}", names.settlement_names);
     Ok(names
         .settlement_names
         .iter()
