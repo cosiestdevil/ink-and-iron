@@ -161,11 +161,17 @@ fn new_game_menu(
                             }
                         });
                 }
-                if ui.button("Start").clicked() {
+                let start_button_enabled = selected_civs
+                    .iter()
+                    .take(*player_count as usize)
+                    .all(|civ| civ.is_some());
+                let start_button = egui::Button::new("Start");
+                if ui.add_enabled(start_button_enabled, start_button).clicked() {
                     params.0 = Some(*temp_params);
                     commands.insert_resource(GameState::new(
                         *player_count as usize,
-                        civs.as_ref().iter().map(|a| a.1.clone()).collect(),
+                        selected_civs,
+                        civs.as_ref(),
                     ));
                     next_state.set(AppState::Generating);
                 }
