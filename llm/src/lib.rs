@@ -1,0 +1,302 @@
+use std::{ffi::CString, sync::Arc};
+
+use libloading::Library;
+pub use llm_api::settlement_names::SettlementNameCtx;
+use llm_api::{
+    ByteStr, LLMOps, SettlementNamesOutput, StatusCode, UnitSpawnBarksOutput,
+    settlement_names::{self, ExternSettlementNameCtx},
+    unit_spawn_barks::{ExternUnitSpawnBarkCtx, UnitSpawnBarkCtx},
+};
+use tokio::sync::{
+    OnceCell, RwLock,
+    oneshot::{self, Sender},
+};
+use tracing::info;
+
+pub async fn unit_spawn_barks(
+    force_cpu: bool,
+    no_llm: bool,
+    ctx: UnitSpawnBarkCtx,
+    temp: f32,
+) -> anyhow::Result<Vec<String>> {
+    let ops = get_llm(force_cpu, no_llm).await;
+    let (tx, rx) = oneshot::channel();
+    _unit_spawn_barks(&ops.ops, tx, ctx, temp);
+    let res = rx.await?;
+    Ok(res)
+}
+
+pub async fn settlement_names(
+    force_cpu: bool,
+    no_llm: bool,
+    ctx: SettlementNameCtx,
+    temp: f32,
+) -> anyhow::Result<Vec<String>> {
+    let ops = get_llm(force_cpu, no_llm).await;
+    let (tx, rx) = oneshot::channel();
+    let seed_names = ctx.seed_names.clone();
+    _settlement_names(&ops.ops, tx, ctx, temp);
+    let res = rx.await?;
+    info!("Received settlement names: {:?} using seed name: {:?}", res, seed_names);
+    Ok(res)
+}
+fn _unit_spawn_barks(ops: &LLMOps, tx: Sender<Vec<String>>, ctx: UnitSpawnBarkCtx, temp: f32) {
+    let cstr = CString::new(ctx.civilisation_name.clone()).expect("no interior NULs");
+    let c_ptr = cstr.into_raw();
+    let owned = Box::new(llm_api::unit_spawn_barks::OwnedCtx {
+        tx,
+        cstr_ptr: c_ptr,
+        ctx: ExternUnitSpawnBarkCtx {
+            civilisation_name: c_ptr,
+            unit_type: CString::new(ctx.unit_type.clone())
+                .expect("no interior NULs")
+                .into_raw(),
+        },
+    });
+    let ctx_ptr: *const ExternUnitSpawnBarkCtx = &owned.ctx;
+    let user_data = Box::into_raw(owned);
+    extern "C" fn unit_spawn_barks_callback(
+        out_names: *const ByteStr,
+        out_names_len: usize,
+        user_data: *mut llm_api::unit_spawn_barks::OwnedCtx,
+        _status: StatusCode,
+    ) {
+        let owned: Box<llm_api::unit_spawn_barks::OwnedCtx> = unsafe { Box::from_raw(user_data) };
+        info!("Received unit spawn barks");
+        let list = unsafe { core::slice::from_raw_parts(out_names, out_names_len) };
+        let mut names = Vec::new();
+        for bs in list {
+            let bytes = unsafe { core::slice::from_raw_parts(bs.ptr, bs.len) };
+            if let Ok(s) = core::str::from_utf8(bytes) {
+                // Own if needed:
+                let owned: String = s.to_owned();
+                names.push(owned);
+            } else {
+                // invalid utf-8; skip or record error
+            }
+        }
+        let _ = owned.tx.send(names);
+        if !owned.cstr_ptr.is_null() {
+            unsafe {
+                let _ = CString::from_raw(owned.cstr_ptr);
+            } // drops and frees
+        }
+    }
+    info!("Calling unit spawn barks");
+    let a = ops.unit_spawn_barks;
+    info!("Calling unit spawn barks");
+    (a)(ctx_ptr, temp, user_data, unit_spawn_barks_callback);
+    info!("Called unit spawn barks");
+}
+fn _settlement_names(ops: &LLMOps, tx: Sender<Vec<String>>, ctx: SettlementNameCtx, temp: f32) {
+    let cstr = CString::new(ctx.civilisation_name.clone()).expect("no interior NULs");
+    let c_ptr = cstr.into_raw();
+    let owned = Box::new(llm_api::settlement_names::OwnedCtx {
+        tx,
+        cstr_ptr: c_ptr,
+        ctx: ExternSettlementNameCtx {
+            civilisation_name: c_ptr,
+            seed_names: llm_api::settlement_names::as_bytestrs(&ctx.seed_names).as_ptr(),
+            seed_names_len: ctx.seed_names.len(),
+        },
+    });
+    let ctx_ptr: *const ExternSettlementNameCtx = &owned.ctx;
+    let user_data = Box::into_raw(owned);
+    extern "C" fn settlement_names_callback(
+        out_names: *const ByteStr,
+        out_names_len: usize,
+        user_data: *mut llm_api::settlement_names::OwnedCtx,
+        _status: StatusCode,
+    ) {
+        let owned: Box<llm_api::settlement_names::OwnedCtx> = unsafe { Box::from_raw(user_data) };
+        info!("Received settlement names");
+        let list = unsafe { core::slice::from_raw_parts(out_names, out_names_len) };
+        let mut names = Vec::new();
+        for bs in list {
+            let bytes = unsafe { core::slice::from_raw_parts(bs.ptr, bs.len) };
+            if let Ok(s) = core::str::from_utf8(bytes) {
+                // Own if needed:
+                let owned: String = s.to_owned();
+                names.push(owned);
+            } else {
+                // invalid utf-8; skip or record error
+            }
+        }
+        let _ = owned.tx.send(names);
+        if !owned.cstr_ptr.is_null() {
+            unsafe {
+                let _ = CString::from_raw(owned.cstr_ptr);
+            } // drops and frees
+        }
+    }
+    info!("Calling settlement names");
+    let a = ops.settlement_names;
+    info!("Calling settlement names");
+    (a)(ctx_ptr, temp, user_data, settlement_names_callback);
+    info!("Called settlement names");
+}
+
+pub struct LLMHandle {
+    pub ops: LLMOps,
+    pub _lib: Option<Library>,
+}
+impl LLMHandle {
+    pub fn new(ops: LLMOps, lib: Option<Library>) -> Self {
+        LLMHandle { ops, _lib: lib }
+    }
+}
+static LLM: OnceCell<RwLock<Option<Arc<LLMHandle>>>> = OnceCell::const_new();
+pub async fn get_llm(force_cpu: bool, no_llm: bool) -> Arc<LLMHandle> {
+    let llm_lock = LLM.get_or_init(|| async { RwLock::new(None) }).await;
+    {
+        let read_guard = llm_lock.read().await;
+        if let Some(ref llm_arc) = *read_guard {
+            return llm_arc.clone();
+        }
+    }
+    let mut write_guard = llm_lock.write().await;
+    if write_guard.is_none() {
+        let (ops, lib) = load_llm(force_cpu, no_llm).expect("Failed to load LLM");
+        let llm_arc = Arc::new(LLMHandle::new(ops, lib));
+        *write_guard = Some(llm_arc);
+    }
+    if let Some(ref llm_arc) = *write_guard {
+        return llm_arc.clone();
+    }
+    unreachable!()
+}
+
+#[cfg(target_os = "windows")]
+const PRIMARY_LIBRARY: &str = "llm_provider_cuda.dll";
+#[cfg(target_os = "linux")]
+const PRIMARY_LIBRARY: &str = "libllm_provider_cuda.so";
+#[cfg(target_os = "windows")]
+const CPU_LIBRARY: &str = "llm_provider.dll";
+#[cfg(target_os = "linux")]
+const CPU_LIBRARY: &str = "libllm_provider.so";
+extern "C" fn no_llm_settlement_names(
+    ctx: *const ExternSettlementNameCtx,
+    _temp: f32,
+    user: *mut settlement_names::OwnedCtx,
+    done: SettlementNamesOutput,
+) {
+    let ctx_owned = unsafe { SettlementNameCtx::from_extern(ctx) };
+    let user: Box<settlement_names::OwnedCtx> = unsafe { Box::from_raw(user) };
+    let bytestrs: Vec<ByteStr> = ctx_owned
+        .seed_names
+        .iter()
+        .map(|s| ByteStr {
+            ptr: s.as_ptr(),
+            len: s.len(),
+        })
+        .collect();
+    let user = Box::into_raw(user);
+    done(bytestrs.as_ptr(), bytestrs.len(), user, StatusCode::OK);
+}
+extern "C" fn no_llm_unit_spawn_barks(
+    ctx: *const ExternUnitSpawnBarkCtx,
+    _temp: f32,
+    user: *mut llm_api::unit_spawn_barks::OwnedCtx,
+    done: UnitSpawnBarksOutput,
+) {
+    let ctx_owned = unsafe { UnitSpawnBarkCtx::from_extern(ctx) };
+    let user: Box<llm_api::unit_spawn_barks::OwnedCtx> = unsafe { Box::from_raw(user) };
+    let bytestrs: Vec<ByteStr> = [
+        format!("{} says hello!", ctx_owned.unit_type),
+        format!("{} is ready for battle!", ctx_owned.unit_type),
+    ]
+    .iter()
+    .map(|s| ByteStr {
+        ptr: s.as_ptr(),
+        len: s.len(),
+    })
+    .collect();
+    let user = Box::into_raw(user);
+    done(bytestrs.as_ptr(), bytestrs.len(), user, StatusCode::OK);
+}
+fn load_llm(force_cpu: bool, no_llm: bool) -> anyhow::Result<(LLMOps, Option<Library>)> {
+    if no_llm {
+        let ops = LLMOps {
+            settlement_names: no_llm_settlement_names,
+            unit_spawn_barks: no_llm_unit_spawn_barks,
+        };
+        return Ok((ops, None));
+    }
+    unsafe {
+        let lib = if force_cpu {
+            libloading::Library::new(CPU_LIBRARY)?
+        } else {
+            let mut lib = libloading::Library::new(PRIMARY_LIBRARY);
+            if let Err(_err) = lib {
+                info!("Cuda load failed, falling back to CPU LLM");
+                lib = libloading::Library::new(CPU_LIBRARY);
+            } else {
+                info!("Cuda LLM loaded");
+            }
+            lib?
+        };
+        info!("Found Library");
+        let func: libloading::Symbol<llm_api::CreateFn> = lib.get(b"create_llm_provider")?;
+        info!("Found Create Function");
+        use core::mem::MaybeUninit;
+
+        // 1) Create uninitialized storage
+        let mut out = MaybeUninit::<LLMOps>::uninit();
+
+        let ok = func(out.as_mut_ptr());
+        if ok {
+            let ops = out.assume_init();
+            info!("Loaded Ops");
+            Ok((ops, Some(lib)))
+        } else {
+            panic!("AHH");
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[tokio::test]
+    async fn test_no_llm_settlement_names() {
+        *LLM.get_or_init(|| async { RwLock::new(None) })
+            .await
+            .write()
+            .await = None;
+        let expected = vec!["Alpha".to_string(), "Beta".to_string()];
+        let names = settlement_names(
+            false,
+            true,
+            SettlementNameCtx {
+                civilisation_name: "TestCiv".to_string(),
+                seed_names: vec!["Alpha".to_string(), "Beta".to_string()],
+            },
+            0.5,
+        )
+        .await
+        .unwrap();
+        assert_eq!(names, expected);
+    }
+    #[tokio::test]
+    async fn test_cpu_llm_settlement_names() {
+        *LLM.get_or_init(|| async { RwLock::new(None) })
+            .await
+            .write()
+            .await = None;
+        let expected = vec!["Alpha".to_string(), "Beta".to_string()];
+        let names = settlement_names(
+            true,
+            false,
+            SettlementNameCtx {
+                civilisation_name: "TestCiv".to_string(),
+                seed_names: vec!["Gamma".to_string(), "Delta".to_string()],
+            },
+            0.5,
+        )
+        .await
+        .unwrap();
+        println!("Names: {:?}", names);
+        assert!(!names.is_empty());
+        assert_ne!(names, expected);
+    }
+}
