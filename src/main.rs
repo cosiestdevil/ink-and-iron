@@ -161,11 +161,11 @@ fn main() -> anyhow::Result<()> {
         .run();
     Ok(())
 }
-#[derive(Resource,Default)]
-struct LoadedFolders{
-    civs:Option<Handle<LoadedFolder>>
+#[derive(Resource, Default)]
+struct LoadedFolders {
+    civs: Option<Handle<LoadedFolder>>,
 }
-fn load_civs(asset_server:Res<AssetServer>,mut folders:ResMut<LoadedFolders>){
+fn load_civs(asset_server: Res<AssetServer>, mut folders: ResMut<LoadedFolders>) {
     folders.civs = Some(asset_server.load_folder("civilisations"));
 }
 fn load_settings(mut commands: Commands) {
