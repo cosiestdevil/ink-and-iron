@@ -1,4 +1,3 @@
-
 #[repr(C)]
 pub struct LLMOps {
     pub settlement_names: extern "C" fn(
@@ -50,10 +49,13 @@ pub mod settlement_names {
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct ExternSettlementNameCtx {
         pub civilisation_name: *mut c_char,
+        pub seed_names: *const ByteStr,
+        pub seed_names_len: usize,
     }
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct SettlementNameCtx {
         pub civilisation_name: String,
+        pub seed_names: Vec<String>,
     }
     impl SettlementNameCtx {
         /// .
@@ -64,8 +66,19 @@ pub mod settlement_names {
         pub unsafe fn from_extern(p: *const ExternSettlementNameCtx) -> Self {
             assert!(!p.is_null());
             let c = unsafe { std::ffi::CStr::from_ptr((*p).civilisation_name) };
+            let seeds_slice = unsafe { std::slice::from_raw_parts(
+                (*p).seed_names,
+                (*p).seed_names_len,
+            ) };
             SettlementNameCtx {
                 civilisation_name: c.to_string_lossy().into_owned(),
+                seed_names: seeds_slice
+                    .iter()
+                    .map(|bs| {
+                        let bytes = unsafe { core::slice::from_raw_parts(bs.ptr, bs.len) };
+                        String::from_utf8_lossy(bytes).into_owned()
+                    })
+                    .collect(),
             }
         }
     }
