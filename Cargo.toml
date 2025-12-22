@@ -33,7 +33,7 @@ llm-api = { workspace = true}
 world-generation = {workspace = true}
 pathfinding = {workspace = true}
 helpers = {workspace = true}
-libloading = "0.8.9"
+llm ={ path = "./llm"}
 
 #bevy_panorbit_camera = { version = "0.33.0", features = ["bevy_egui"] }
 tracing-appender = "0.2.3"

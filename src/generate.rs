@@ -96,6 +96,7 @@ fn generate_unit_spawn_barks(
         runtime.spawn_background_task(move |mut ctx| async move {
             if let Ok(barks) = llm::unit_spawn_barks(
                 llm_cpu,
+                false,
                 UnitSpawnBarkCtx {
                     civilisation_name: civ_name,
                     unit_type,
@@ -140,12 +141,15 @@ fn generate_settlement_name(
     let llm_cpu = llm_cpu.0;
     for player in game_state.players.values() {
         let civ_name = player.settlement_context.civilisation_name.clone();
+        let seed_names = player.settlement_context.seed_names.clone();
         let player_id = player.id;
         runtime.spawn_background_task(move |mut ctx| async move {
             if let Ok(names) = llm::settlement_names(
                 llm_cpu,
+                false,
                 SettlementNameCtx {
                     civilisation_name: civ_name,
+                    seed_names
                 },
                 temp,
             )
