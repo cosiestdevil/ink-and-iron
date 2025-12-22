@@ -715,6 +715,7 @@ struct Notification {
 struct Civilisation {
     pub name: String,
     pub units: Vec<UnitType>,
+    pub settlement_name_seeds: Vec<String>,
 }
 #[derive(Default)]
 struct CivilisationAssetLoader;
@@ -826,6 +827,7 @@ impl GameState {
                 settlement_names: vec![],
                 settlement_context: SettlementNameCtx {
                     civilisation_name: civ.name.to_string(),
+                    seed_names: civ.settlement_name_seeds.clone(),
                 },
                 civ: civ.clone(),
                 camera_entity: None,

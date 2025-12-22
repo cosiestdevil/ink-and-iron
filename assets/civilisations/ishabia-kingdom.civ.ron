@@ -5,4 +5,16 @@ Civilisation(
         (name: "Archer", default_cost:3.0, health:8.0,range:2,speed:5.0,mesh_path:"meshes/archer.glb",icon_path:"icons/ranger.png"),
         (name: "Mage", default_cost:4.0, health:6.0,range:2,speed:5.0,mesh_path:"meshes/mage.glb",icon_path:"icons/wizard.png"),
     ],
+    settlement_name_seeds: [
+        "Ishabia",
+        "Kingdom",
+        "Realm",
+        "Dominion",
+        "Empire",
+        "Sovereignty",
+        "Territory",
+        "Province",
+        "Land",
+        "Nation",
+    ],
 )
