@@ -829,9 +829,21 @@ struct GameState {
     turn_ready_to_end: bool,
 }
 impl GameState {
-    fn new(player_count: usize, civs: Vec<Civilisation>) -> Self {
+    fn new(
+        player_count: usize,
+        selected_civs: &mut [Option<AssetId<Civilisation>>],
+        civs: &Assets<Civilisation>,
+    ) -> Self {
         let mut players = HashMap::with_capacity(player_count);
-        for (i, civ) in civs.iter().take(player_count).enumerate() {
+        for i in 0..player_count {
+            let civ = if let Some(civ_id) = selected_civs.get(i).and_then(|c| c.as_ref()) {
+                civs.get(*civ_id).unwrap().clone()
+            } else {
+                let civs_vec = civs.iter().map(|(_, c)| c.clone()).collect::<Vec<_>>();
+                let mut rng = ChaCha20Rng::from_os_rng();
+                let civ_i = rng.sample(Uniform::new(0, civs_vec.len()).unwrap());
+                civs_vec.get(civ_i).unwrap().clone()
+            };
             let t = i as f32 / (player_count + 1) as f32;
             let color = Color::hsl(360.0 * t, 0.95, 0.7);
             let player = Player {
