@@ -11,7 +11,15 @@ use crate::{
     llm::SettlementNameCtx,
 };
 use bevy::{
-    asset::{AssetLoader, LoadContext, LoadedFolder, io::Reader, ron}, camera::Exposure, input_focus::InputFocus, light::AtmosphereEnvironmentMapLight, log::LogPlugin, math::bounding::Aabb2d, pbr::Atmosphere, post_process::bloom::Bloom, prelude::*
+    asset::{AssetLoader, LoadContext, LoadedFolder, io::Reader, ron},
+    camera::Exposure,
+    input_focus::InputFocus,
+    light::AtmosphereEnvironmentMapLight,
+    log::LogPlugin,
+    math::bounding::Aabb2d,
+    pbr::Atmosphere,
+    post_process::bloom::Bloom,
+    prelude::*,
 };
 use bevy_easings::{Ease, EasingsPlugin};
 use bevy_egui::{
@@ -115,7 +123,13 @@ fn main() -> anyhow::Result<()> {
         .insert_resource::<generate::WorldGenerationParams>((&args).into())
         .add_systems(
             Startup,
-            (load_settings, startup_screens, setup_rng, archive_old_logs,load_civs),
+            (
+                load_settings,
+                startup_screens,
+                setup_rng,
+                archive_old_logs,
+                load_civs,
+            ),
         )
         .add_systems(
             Update,
