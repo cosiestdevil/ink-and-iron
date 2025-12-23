@@ -33,6 +33,7 @@ use bevy_rts_camera::{RtsCamera, RtsCameraControls, RtsCameraPlugin};
 use bevy_tokio_tasks::TokioTasksRuntime;
 use clap::Parser;
 use colorgrad::Gradient;
+use llm::LLMMode;
 use num::Num;
 use rand::{Rng, SeedableRng, distr::Uniform};
 use rand_chacha::ChaCha20Rng;
@@ -64,8 +65,8 @@ struct Args {
     seed: Option<String>,
     #[arg(long, default_value_t = WorldType::Default)]
     world_type: WorldType,
-    #[arg(long, default_value_t = false)]
-    llm_cpu: bool,
+    #[arg(long, default_value_t = LLMMode::None)]
+    llm_mode: LLMMode,
 }
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
 pub(crate) enum AppState {
@@ -78,7 +79,7 @@ pub(crate) enum AppState {
 mod logs;
 mod menu;
 #[derive(Resource)]
-struct LlmCpu(bool);
+struct LlmCpu(LLMMode);
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     App::new()
@@ -115,7 +116,7 @@ fn main() -> anyhow::Result<()> {
         .init_resource::<InputFocus>()
         .init_resource::<crate::pathfinding::PathFinding>()
         .init_resource::<LoadedFolders>()
-        .insert_resource(LlmCpu(args.llm_cpu))
+        .insert_resource(LlmCpu(args.llm_mode))
         .insert_resource(Seed(args.seed.clone()))
         //.insert_resource(GameState::new(2))
         .insert_resource::<Random<RandomRng>>(Random(None))
