@@ -12,14 +12,18 @@ use tokio::sync::{
     oneshot::{self, Sender},
 };
 use tracing::info;
-
+#[derive(Clone, Copy,Debug,PartialEq,Eq,Hash)]
+pub enum LLMMode {
+    Cuda,
+    Cpu,
+    None,
+}
 pub async fn unit_spawn_barks(
-    force_cpu: bool,
-    no_llm: bool,
+    llm_mode: LLMMode,
     ctx: UnitSpawnBarkCtx,
     temp: f32,
 ) -> anyhow::Result<Vec<String>> {
-    let ops = get_llm(force_cpu, no_llm).await;
+    let ops = get_llm(llm_mode).await;
     let (tx, rx) = oneshot::channel();
     _unit_spawn_barks(&ops.ops, tx, ctx, temp);
     let res = rx.await?;
@@ -27,17 +31,19 @@ pub async fn unit_spawn_barks(
 }
 
 pub async fn settlement_names(
-    force_cpu: bool,
-    no_llm: bool,
+    llm_mode: LLMMode,
     ctx: SettlementNameCtx,
     temp: f32,
 ) -> anyhow::Result<Vec<String>> {
-    let ops = get_llm(force_cpu, no_llm).await;
+    let ops = get_llm(llm_mode).await;
     let (tx, rx) = oneshot::channel();
     let seed_names = ctx.seed_names.clone();
     _settlement_names(&ops.ops, tx, ctx, temp);
     let res = rx.await?;
-    info!("Received settlement names: {:?} using seed name: {:?}", res, seed_names);
+    info!(
+        "Received settlement names: {:?} using seed name: {:?}",
+        res, seed_names
+    );
     Ok(res)
 }
 fn _unit_spawn_barks(ops: &LLMOps, tx: Sender<Vec<String>>, ctx: UnitSpawnBarkCtx, temp: f32) {
@@ -146,7 +152,7 @@ impl LLMHandle {
     }
 }
 static LLM: OnceCell<RwLock<Option<Arc<LLMHandle>>>> = OnceCell::const_new();
-pub async fn get_llm(force_cpu: bool, no_llm: bool) -> Arc<LLMHandle> {
+pub async fn get_llm(llm_mode: LLMMode) -> Arc<LLMHandle> {
     let llm_lock = LLM.get_or_init(|| async { RwLock::new(None) }).await;
     {
         let read_guard = llm_lock.read().await;
@@ -156,7 +162,7 @@ pub async fn get_llm(force_cpu: bool, no_llm: bool) -> Arc<LLMHandle> {
     }
     let mut write_guard = llm_lock.write().await;
     if write_guard.is_none() {
-        let (ops, lib) = load_llm(force_cpu, no_llm).expect("Failed to load LLM");
+        let (ops, lib) = load_llm(llm_mode).expect("Failed to load LLM");
         let llm_arc = Arc::new(LLMHandle::new(ops, lib));
         *write_guard = Some(llm_arc);
     }
@@ -214,14 +220,20 @@ extern "C" fn no_llm_unit_spawn_barks(
     let user = Box::into_raw(user);
     done(bytestrs.as_ptr(), bytestrs.len(), user, StatusCode::OK);
 }
-fn load_llm(force_cpu: bool, no_llm: bool) -> anyhow::Result<(LLMOps, Option<Library>)> {
-    if no_llm {
-        let ops = LLMOps {
-            settlement_names: no_llm_settlement_names,
-            unit_spawn_barks: no_llm_unit_spawn_barks,
-        };
-        return Ok((ops, None));
+fn load_llm(llm_mode:LLMMode,) -> anyhow::Result<(LLMOps, Option<Library>)> {
+    match llm_mode{
+        LLMMode::Cuda => load_llm_internal(false),
+        LLMMode::Cpu => load_llm_internal(true),
+        LLMMode::None => {
+            let ops = LLMOps {
+                settlement_names: no_llm_settlement_names,
+                unit_spawn_barks: no_llm_unit_spawn_barks,
+            };
+            Ok((ops, None))
+        },
     }
+}
+fn load_llm_internal(force_cpu: bool) -> anyhow::Result<(LLMOps, Option<Library>)> {
     unsafe {
         let lib = if force_cpu {
             libloading::Library::new(CPU_LIBRARY)?
@@ -265,8 +277,7 @@ mod tests {
             .await = None;
         let expected = vec!["Alpha".to_string(), "Beta".to_string()];
         let names = settlement_names(
-            false,
-            true,
+            LLMMode::None,
             SettlementNameCtx {
                 civilisation_name: "TestCiv".to_string(),
                 seed_names: vec!["Alpha".to_string(), "Beta".to_string()],
@@ -285,8 +296,7 @@ mod tests {
             .await = None;
         let expected = vec!["Alpha".to_string(), "Beta".to_string()];
         let names = settlement_names(
-            true,
-            false,
+            LLMMode::Cpu,
             SettlementNameCtx {
                 civilisation_name: "TestCiv".to_string(),
                 seed_names: vec!["Gamma".to_string(), "Delta".to_string()],
