@@ -3,7 +3,7 @@ name = "ink-and-iron"
 edition = "2024"
 publish = false
 [workspace]
-members = ["helpers","llm-api", "llm-provider", "llm-provider-cpu", "llm-provider-cuda", "pathfinding", "world-generation"]
+members = ["helpers","llm-api", "llm-provider", "llm-provider-cpu", "llm-provider-cuda", "menu", "pathfinding", "world-generation"]
 [workspace.dependencies]
 tokio = { version = "1.48.0", features = ["full"] }
 helpers = {path="./helpers"}
@@ -34,7 +34,7 @@ world-generation = {workspace = true}
 pathfinding = {workspace = true}
 helpers = {workspace = true}
 llm ={ path = "./llm"}
-
+menu = { path = "./menu" }
 #bevy_panorbit_camera = { version = "0.33.0", features = ["bevy_egui"] }
 tracing-appender = "0.2.3"
 bevy_rts_camera = { version = "0.12"}
