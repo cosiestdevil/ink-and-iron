@@ -64,7 +64,6 @@ pub enum StatusCode {
     Error = 1,
 }
 pub mod settlement_names {
-    use std::ffi::c_char;
 
     use serde::{Deserialize, Serialize};
     use tokio::sync::oneshot;
@@ -73,7 +72,7 @@ pub mod settlement_names {
     #[repr(C)]
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct ExternSettlementNameCtx {
-        pub civilisation_name: *mut c_char,
+        pub civilisation_name: ByteStr,
         pub seed_names: *const ByteStr,
         pub seed_names_len: usize,
     }
@@ -90,42 +89,34 @@ pub mod settlement_names {
         /// .
         pub unsafe fn from_extern(p: *const ExternSettlementNameCtx) -> Self {
             assert!(!p.is_null());
-            let c = unsafe { std::ffi::CStr::from_ptr((*p).civilisation_name) };
+            let t = unsafe{(*p).civilisation_name};
+            println!("ctx: {:?}", unsafe{*p} );
             let seeds_slice = unsafe { std::slice::from_raw_parts(
                 (*p).seed_names,
                 (*p).seed_names_len,
             ) };
             SettlementNameCtx {
-                civilisation_name: c.to_string_lossy().into_owned(),
+                civilisation_name:t.as_string(),
                 seed_names: seeds_slice
                     .iter()
                     .map(|bs| {
-                        let bytes = unsafe { core::slice::from_raw_parts(bs.ptr, bs.len) };
-                        String::from_utf8_lossy(bytes).into_owned()
+                        println!("seed name ByteStr: ptr={:?}, len={}", bs.ptr, bs.len);
+                        bs.as_string()
                     })
                     .collect(),
             }
         }
     }
 
-    pub fn as_bytestrs(strings: &[String]) -> Vec<ByteStr> {
-        strings
-            .iter()
-            .map(|s| ByteStr {
-                ptr: s.as_ptr(),
-                len: s.len(),
-            })
-            .collect()
-    }
+    
+    #[derive(Debug)]
     pub struct OwnedCtx {
-        pub tx: oneshot::Sender<Vec<String>>,
-        pub cstr_ptr: *mut c_char,        // to free later
+        pub tx: oneshot::Sender<Vec<String>>,     // to free later
         pub ctx: ExternSettlementNameCtx, // lives on heap via this Box
     }
     unsafe impl Send for OwnedCtx {}
 }
 pub mod unit_spawn_barks {
-    use std::ffi::c_char;
 
     use serde::{Deserialize, Serialize};
     use tokio::sync::oneshot;
@@ -134,8 +125,8 @@ pub mod unit_spawn_barks {
     #[repr(C)]
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     pub struct ExternUnitSpawnBarkCtx {
-        pub civilisation_name: *mut c_char,
-        pub unit_type:  *mut c_char,
+        pub civilisation_name: ByteStr,
+        pub unit_type:  ByteStr,
     }
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct UnitSpawnBarkCtx {
@@ -152,30 +143,18 @@ pub mod unit_spawn_barks {
             assert!(!p.is_null());
             
             UnitSpawnBarkCtx {
-                civilisation_name: {
-                    let c = unsafe { std::ffi::CStr::from_ptr((*p).civilisation_name) };
-                    c.to_string_lossy().into_owned()
-                },
+                civilisation_name: 
+                    unsafe{(*p).civilisation_name.as_string()}
+                ,
                 unit_type: {
-                    let c = unsafe { std::ffi::CStr::from_ptr((*p).unit_type) };
-                    c.to_string_lossy().into_owned()
+                    unsafe{(*p).unit_type.as_string()}
                 }
             }
         }
     }
 
-    pub fn as_bytestrs(strings: &[String]) -> Vec<ByteStr> {
-        strings
-            .iter()
-            .map(|s| ByteStr {
-                ptr: s.as_ptr(),
-                len: s.len(),
-            })
-            .collect()
-    }
     pub struct OwnedCtx {
-        pub tx: oneshot::Sender<Vec<String>>,
-        pub cstr_ptr: *mut c_char,        // to free later
+        pub tx: oneshot::Sender<Vec<String>>,      // to free later
         pub ctx: ExternUnitSpawnBarkCtx, // lives on heap via this Box
     }
     unsafe impl Send for OwnedCtx {}
