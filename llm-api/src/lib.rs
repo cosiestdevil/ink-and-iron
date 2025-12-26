@@ -15,9 +15,34 @@ pub struct LLMOps {
 }
 pub type CreateFn = extern "C" fn(out_ops: *mut LLMOps) -> bool;
 #[repr(C)]
+#[derive(Debug,Copy,Clone,PartialEq,Eq)]
 pub struct ByteStr {
     pub ptr: *const u8,
     pub len: usize,
+}
+
+impl ByteStr {
+    pub fn as_slice(&self) -> &[u8] {
+        unsafe { core::slice::from_raw_parts(self.ptr, self.len) }
+    }
+    pub fn as_string(&self) -> String {
+        String::from_utf8_lossy(self.as_slice()).to_string()
+    }
+    pub fn from_string(s: &str) -> Self {
+        ByteStr {
+            ptr: s.as_ptr(),
+            len: s.len(),
+        }
+    }
+}
+pub fn as_bytestrs(strings: &[String]) -> Vec<ByteStr> {
+        strings
+            .iter()
+            .map(|s| {
+                println!("Converting string to ByteStr: ptr={:?}, len={}", s.as_ptr(),s.len());
+                ByteStr::from_string(s)
+            })
+            .collect()
 }
 pub type UnitSpawnBarksOutput = extern "C" fn(
     out_names: *const ByteStr,
