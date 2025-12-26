@@ -65,18 +65,16 @@ extern "C" fn extern_settlement_names(
         //     civilisation_name: name,
         // }
     };
-    info!("Munged context");
+    println!("Munged context");
 
     let user: Box<settlement_names::OwnedCtx> = unsafe { Box::from_raw(user) };
     rt_handle().spawn(async move {
         match settlement_names(ctx_owned, temp).await {
             Ok(names_vec) => {
-                info!("Have Settlement names");
-                let bytestrs: Vec<ByteStr> = names_vec
-                    .iter()
-                    .map(|s| ByteStr::from_string(s))
-                    .collect();
-                info!("munged Settlement names");
+                println!("Have Settlement names");
+                let bytestrs: Vec<ByteStr> =
+                    names_vec.iter().map(|s| ByteStr::from_string(s)).collect();
+                println!("munged Settlement names");
                 let user = Box::into_raw(user);
                 done(bytestrs.as_ptr(), bytestrs.len(), user, StatusCode::OK);
             }
@@ -95,21 +93,17 @@ extern "C" fn extern_unit_spawn_barks(
     user: *mut llm_api::unit_spawn_barks::OwnedCtx,
     done: llm_api::UnitSpawnBarksOutput,
 ) {
-    let ctx_owned = unsafe {
-        llm_api::unit_spawn_barks::UnitSpawnBarkCtx::from_extern(ctx)
-    };
-    info!("Munged context");
+    let ctx_owned = unsafe { llm_api::unit_spawn_barks::UnitSpawnBarkCtx::from_extern(ctx) };
+    println!("Munged context");
 
     let user: Box<llm_api::unit_spawn_barks::OwnedCtx> = unsafe { Box::from_raw(user) };
     rt_handle().spawn(async move {
         match unit_spawn_barks(ctx_owned, temp).await {
             Ok(barks_vec) => {
-                info!("Have Unit Spawn Barks");
-                let bytestrs: Vec<ByteStr> = barks_vec
-                    .iter()
-                    .map(|s| ByteStr::from_string(s))
-                    .collect();
-                info!("munged Unit Spawn Barks");
+                println!("Have Unit Spawn Barks");
+                let bytestrs: Vec<ByteStr> =
+                    barks_vec.iter().map(|s| ByteStr::from_string(s)).collect();
+                println!("munged Unit Spawn Barks");
                 let user = Box::into_raw(user);
                 done(bytestrs.as_ptr(), bytestrs.len(), user, StatusCode::OK);
             }
@@ -155,6 +149,9 @@ Content rules for each bark:
 - 2-6 words.
 - In theme with the Civilisation Name
 - In theme with the Unit Type
+- Informed by the Civilisation Description
+- Informed by the provided seed barks.
+- Informed by the Unit Description.
 - Only these characters: letters, numbers, spaces, . ! ? and (optionally) '.
 - Do not echo template tokens or placeholders (e.g., @handle, #Tag, %TOKEN%).
 - Must be UTF-8 compliant.
@@ -186,6 +183,7 @@ Content rules for each name:
 - 1-3 words.
 - In theme with the Civilisation Name
 - Based on the provided Seed Names
+- Informed by the Civilisation Description
 - Only these characters: letters, numbers, spaces, . ! ? and (optionally) '.
 - Do not echo template tokens or placeholders (e.g., @handle, #Tag, %TOKEN%).
 - Must be UTF-8 compliant.
