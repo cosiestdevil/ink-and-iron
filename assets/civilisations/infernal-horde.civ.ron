@@ -1,9 +1,21 @@
 Civilisation(
     name: "Infernal Horde",
     units: [
-        (name: "Barbarian", default_cost:2.0, health:10.0,range:1,speed:5.0,mesh_path:"meshes/fighter.glb",icon_path:"icons/barbarian.png"),
-        (name: "Archer", default_cost:3.0, health:8.0,range:2,speed:5.0,mesh_path:"meshes/archer.glb",icon_path:"icons/ranger.png"),
-        (name: "Mage", default_cost:4.0, health:6.0,range:2,speed:5.0,mesh_path:"meshes/mage.glb",icon_path:"icons/wizard.png"),
+        (name: "Barbarian", default_cost:2.0, health:10.0,range:1,speed:5.0,mesh_path:"meshes/fighter.glb",icon_path:"icons/barbarian.png",seed_barks:[
+            "For the Horde!",
+            "Feel the heat of my blade!",
+            "Burn them all!",
+        ],description:"The Barbarian of the Infernal Horde is a fierce warrior, known for their brute strength and relentless combat style. Clad in rugged armor and wielding heavy weapons, they charge into battle with unyielding fury, embodying the savage spirit of their civilisation."),
+        (name: "Archer", default_cost:3.0, health:8.0,range:2,speed:5.0,mesh_path:"meshes/archer.glb",icon_path:"icons/ranger.png",seed_barks:[
+            "My arrows burn with fury!",
+            "Strike from the shadows of flame.",
+            "The heat of battle fuels my aim.",
+        ],description:"The Archer of the Infernal Horde is a deadly marksman, skilled in the art of ranged combat. With a keen eye and steady hand, they unleash a barrage of flaming arrows upon their enemies, striking fear into the hearts of those who dare oppose their fiery civilisation."),
+        (name: "Mage", default_cost:4.0, health:6.0,range:2,speed:5.0,mesh_path:"meshes/mage.glb",icon_path:"icons/wizard.png",seed_barks:[
+            "Feel the wrath of the inferno!",
+            "The flames obey my command.",
+            "Let the fire consume you!",
+        ],description:"The Mage of the Infernal Horde wields powerful fire magic, channeling the destructive forces of flame to devastate their foes. Through intense training and a deep connection to the elemental plane of fire, they unleash scorching spells that incinerate anything in their path, embodying the relentless power of their civilisation."),
     ],    
     settlement_name_seeds: [
         "Inferno",
@@ -17,4 +29,5 @@ Civilisation(
         "Scorch",
         "Furnace",
     ],
+    description: "The Infernal Horde is a fierce and warlike civilisation that thrives in harsh, fiery environments. Their settlements are often built around volcanic regions or scorched wastelands, reflecting their resilience and strength. The inhabitants of the Infernal Horde are known for their brutal combat skills and unyielding determination, making them formidable opponents on the battlefield.",
 )
