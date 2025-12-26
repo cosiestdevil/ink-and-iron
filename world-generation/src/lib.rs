@@ -32,7 +32,7 @@ impl ToVec2 for voronoice::Point {
         Vec2::new(self.x as f32, self.y as f32)
     }
 }
-
+#[derive(Clone)]
 pub struct WorldMap {
     pub scale: f32,
     pub height_scale: f32,

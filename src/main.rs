@@ -13,6 +13,7 @@ use crate::{
 use bevy::{
     asset::{AssetLoader, LoadContext, LoadedFolder, io::Reader, ron},
     camera::Exposure,
+    ecs::system::SystemState,
     input_focus::InputFocus,
     light::AtmosphereEnvironmentMapLight,
     log::LogPlugin,
@@ -143,7 +144,7 @@ fn main() -> anyhow::Result<()> {
             Update,
             (
                 move_unit,
-                turn_start,
+                turn_start_async,
                 deselect,
                 reset_turn_ready_to_end,
                 move_sun,
@@ -601,23 +602,35 @@ fn debug_notification(
         player.add_notification(format!("This is a test notification! {:?}", time.elapsed()));
     }
 }
-
-fn turn_start(
+fn turn_start_async(
+    runtime: ResMut<TokioTasksRuntime>,
+    world_map: Res<WorldMap>,
+    mut turn_start: MessageReader<TurnStart>,
     mut commands: Commands,
     mut cameras: Query<(&mut Camera, Entity, &mut RtsCameraControls), Without<EguiContext>>,
-    mut turn_start: MessageReader<TurnStart>,
     mut units: Query<&mut Unit>,
     mut settlements: Query<&mut SettlementCenter>,
     mut selected: ResMut<Selection>,
     highlights: Query<Entity, With<CellHighlight>>,
     mut game_state: ResMut<GameState>,
-    world_map: Res<WorldMap>,
-    mut pathfinding: ResMut<crate::pathfinding::PathFinding>,
 ) {
-    let (graph, nodes) = pathfinding::get_graph(&world_map);
-    *pathfinding = pathfinding::PathFinding { graph, nodes };
     for turn in turn_start.read() {
-        let player = game_state.players.get_mut(&turn.player).unwrap();
+        let pathfinding_map = world_map.clone();
+        let turn_player = turn.player;
+        runtime.spawn_background_task(move |mut ctx| async move {
+            let _ = info_span!("turn_start_pathfinding").entered();
+            let (graph, nodes) = pathfinding::get_graph(&pathfinding_map);
+            ctx.run_on_main_thread(move |ctx| {
+                let world = ctx.world;
+                let mut system_state =
+                    SystemState::<(ResMut<crate::pathfinding::PathFinding>,)>::new(world);
+                let (mut pathfinding,) = { system_state.get_mut(world) };
+                *pathfinding = crate::pathfinding::PathFinding { graph, nodes };
+                system_state.apply(world);
+            })
+            .await;
+        });
+        let player = game_state.players.get_mut(&turn_player).unwrap();
         for (mut camera, entity, mut controls) in cameras.iter_mut() {
             if let Some(player_camera_entity) = player.camera_entity
                 && player_camera_entity == entity
@@ -629,18 +642,18 @@ fn turn_start(
                 controls.enabled = false;
             }
         }
-        info!("Turn started for player: {:?}", turn.player);
+        info!("Turn started for player: {:?}", turn_player);
         *selected = Selection::None;
         for entity in highlights.iter() {
             let mut highlight = commands.entity(entity);
             highlight.despawn();
         }
-        for mut unit in units.iter_mut().filter(|u| u.controller == turn.player) {
+        for mut unit in units.iter_mut().filter(|u| u.controller == turn_player) {
             unit.used_speed = 0.0;
         }
         for mut settlement in settlements
             .iter_mut()
-            .filter(|s| s.controller == turn.player)
+            .filter(|s| s.controller == turn_player)
         {
             let production = settlement.production;
             let cell = settlement.cell;
