@@ -74,10 +74,7 @@ extern "C" fn extern_settlement_names(
                 info!("Have Settlement names");
                 let bytestrs: Vec<ByteStr> = names_vec
                     .iter()
-                    .map(|s| ByteStr {
-                        ptr: s.as_ptr(),
-                        len: s.len(),
-                    })
+                    .map(|s| ByteStr::from_string(s))
                     .collect();
                 info!("munged Settlement names");
                 let user = Box::into_raw(user);
@@ -110,10 +107,7 @@ extern "C" fn extern_unit_spawn_barks(
                 info!("Have Unit Spawn Barks");
                 let bytestrs: Vec<ByteStr> = barks_vec
                     .iter()
-                    .map(|s| ByteStr {
-                        ptr: s.as_ptr(),
-                        len: s.len(),
-                    })
+                    .map(|s| ByteStr::from_string(s))
                     .collect();
                 info!("munged Unit Spawn Barks");
                 let user = Box::into_raw(user);
