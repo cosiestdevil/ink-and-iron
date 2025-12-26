@@ -38,6 +38,7 @@ pub async fn settlement_names(
     let ops = get_llm(llm_mode).await;
     let (tx, rx) = oneshot::channel();
     let seed_names = ctx.seed_names.clone();
+    info!("Requesting settlement names with seed names: {:?}", seed_names);
     _settlement_names(&ops.ops, tx, ctx, temp);
     let res = rx.await?;
     info!(
