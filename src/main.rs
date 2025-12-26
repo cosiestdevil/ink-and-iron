@@ -678,7 +678,8 @@ fn turn_start_async(
                                 unit.observe(click_unit);
                                 let bark = player
                                     .unit_spawn_barks
-                                    .pop()
+                                    .get_mut(&unit_constuction.name)
+                                    .and_then(|barks| barks.pop())
                                     .unwrap_or("Unit spawned!".to_string());
                                 player.add_notification_with_icon(bark, unit_icon);
                                 completed_construction = true;
@@ -713,7 +714,7 @@ struct Player {
     camera_entity: Option<Entity>,
     settlement_names: Vec<String>,
     settlement_context: SettlementNameCtx,
-    unit_spawn_barks: Vec<String>,
+    unit_spawn_barks: HashMap<String, Vec<String>>,
     notifications: VecDeque<Notification>,
     civ: Civilisation,
 }
@@ -743,6 +744,7 @@ struct Notification {
 struct Civilisation {
     pub name: String,
     pub units: Vec<UnitType>,
+    pub description: String,
     pub settlement_name_seeds: Vec<String>,
 }
 #[derive(Default)]
@@ -790,6 +792,8 @@ struct UnitType {
     pub speed: f32,
     pub mesh_path: String,
     pub icon_path: String,
+    pub seed_barks: Vec<String>,
+    pub description: String,
 }
 
 impl UnitType {
@@ -867,12 +871,13 @@ impl GameState {
                 settlement_names: vec![],
                 settlement_context: SettlementNameCtx {
                     civilisation_name: civ.name.to_string(),
+                    description: civ.description.to_string(),
                     seed_names: civ.settlement_name_seeds.clone(),
                 },
                 civ: civ.clone(),
                 camera_entity: None,
                 color,
-                unit_spawn_barks: vec![],
+                unit_spawn_barks: HashMap::new(),
                 notifications: VecDeque::new(),
             };
             players.insert(player.id, player);
