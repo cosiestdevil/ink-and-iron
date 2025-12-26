@@ -70,6 +70,7 @@ fn _unit_spawn_barks(ops: &LLMOps, tx: Sender<Vec<String>>, ctx: UnitSpawnBarkCt
         let owned: Box<llm_api::unit_spawn_barks::OwnedCtx> = unsafe { Box::from_raw(user_data) };
         info!("Received unit spawn barks");
         let list = unsafe { core::slice::from_raw_parts(out_names, out_names_len) };
+        //info!("1");
         let mut names = Vec::new();
         for bs in list {
             let bytes = unsafe { core::slice::from_raw_parts(bs.ptr, bs.len) };
@@ -81,12 +82,16 @@ fn _unit_spawn_barks(ops: &LLMOps, tx: Sender<Vec<String>>, ctx: UnitSpawnBarkCt
                 // invalid utf-8; skip or record error
             }
         }
+        //info!("2");
         let _ = owned.tx.send(names);
+        //info!("3");
         if !owned.cstr_ptr.is_null() {
+           // info!("4");
             unsafe {
                 let _ = CString::from_raw(owned.cstr_ptr);
             } // drops and frees
         }
+        //info!("5");
     }
     info!("Calling unit spawn barks");
     let a = ops.unit_spawn_barks;
