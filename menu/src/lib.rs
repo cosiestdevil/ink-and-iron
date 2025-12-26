@@ -106,7 +106,7 @@ pub enum NewGameMenuAction {
     Start,
     Return,
 }
-pub fn new_game_menu<CivId: PartialEq + Eq + std::hash::Hash + Copy, Civ: Display+Ord>(
+pub fn new_game_menu<CivId: PartialEq + Eq + std::hash::Hash + Copy, Civ: Display + Ord>(
     ctx: &mut egui::Context,
     offset_x: f32,
     width: f32,
@@ -115,7 +115,7 @@ pub fn new_game_menu<CivId: PartialEq + Eq + std::hash::Hash + Copy, Civ: Displa
 ) -> NewGameMenuAction {
     let mut action = NewGameMenuAction::None;
     let mut civ_list = civs.iter().collect::<Vec<_>>();
-    civ_list.sort_by_key(|e|e.1);
+    civ_list.sort_by_key(|e| e.1);
     egui::CentralPanel::default().show(ctx, |_ui| {});
     egui::Area::new("main_menu".into())
         .anchor(Align2::CENTER_CENTER, egui::vec2(offset_x, 0.0))

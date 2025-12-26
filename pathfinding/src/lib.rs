@@ -1,14 +1,12 @@
-use world_generation::CellId;
-use world_generation::WorldMap;
 use glam::Vec2;
 use glam::Vec3Swizzles;
 use petgraph::Graph;
 use petgraph::prelude::*;
 use std::collections::HashMap;
+use world_generation::CellId;
+use world_generation::WorldMap;
 
-pub fn get_graph(
-    world_map:&WorldMap,
-) -> (Graph<CellId, f32>, HashMap<CellId, NodeIndex>) {
+pub fn get_graph(world_map: &WorldMap) -> (Graph<CellId, f32>, HashMap<CellId, NodeIndex>) {
     let mut graph = Graph::<CellId, f32>::new();
     let mut nodes = HashMap::new();
     for cell in world_map.iter_cells() {
@@ -19,7 +17,6 @@ pub fn get_graph(
     for (cell_id, node) in nodes.iter() {
         let c_pos = world_map.get_position_for_cell(*cell_id);
         for n_cell_id in world_map.get_neighbours(*cell_id) {
-            
             let n_pos = world_map.get_position_for_cell(n_cell_id);
             let length = c_pos.distance(n_pos);
             let height = (c_pos.y - n_pos.y).abs();
@@ -52,8 +49,8 @@ impl AStarNode {
             parent,
         }
     }
-    fn f(&self)->f32{
-        self.g+self.h
+    fn f(&self) -> f32 {
+        self.g + self.h
     }
 }
 
@@ -62,7 +59,7 @@ pub fn a_star(
     goal: CellId,
     graph: &Graph<CellId, f32>,
     nodes: &HashMap<CellId, NodeIndex>,
-    world_map:&WorldMap,
+    world_map: &WorldMap,
 ) -> Option<Vec<CellId>> {
     let mut open_list = vec![AStarNode::new(
         start,
@@ -128,8 +125,6 @@ fn reconstruct_path(current: AStarNode) -> Vec<CellId> {
     //path.reverse();
     path
 }
-
-
 
 fn heuristic(start: Vec2, goal: Vec2) -> f32 {
     start.distance(goal)

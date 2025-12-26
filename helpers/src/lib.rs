@@ -1,6 +1,6 @@
+use glam::Vec2;
 use std::collections::HashMap;
 use std::hash::Hash;
-use glam::Vec2;
 pub fn invert_borrowed<K, V>(map: &HashMap<K, V>) -> HashMap<V, Vec<K>>
 where
     V: Eq + Hash + Copy,

@@ -1,7 +1,5 @@
 use bevy::prelude::*;
-use bevy_egui::{
-    EguiContexts, EguiPrimaryContextPass,
-};
+use bevy_egui::{EguiContexts, EguiPrimaryContextPass};
 use bevy_kira_audio::{AudioChannel, AudioControl};
 use menu::Settings;
 

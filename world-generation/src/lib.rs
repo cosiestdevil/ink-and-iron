@@ -137,7 +137,7 @@ pub struct WorldGenerationParams {
     pub scale: f32,
     pub world_type: WorldType,
 }
-#[derive(Clone, Copy,Debug,PartialEq,Eq,Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum WorldType {
     Default = 0,
     Flat = 1,
