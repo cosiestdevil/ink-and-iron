@@ -128,7 +128,7 @@ fn generate_unit_spawn_barks(
                     llm_cpu.into(),
                     UnitSpawnBarkCtx {
                         civilisation_name: civ_name,
-                        civ_description: civ_description,
+                        civ_description,
                         unit_type: unit_type.clone(),
                         seed_barks,
                         description: unit_description,
