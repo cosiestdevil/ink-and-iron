@@ -96,6 +96,7 @@ features = [
     "x11",
     "wayland",
     "debug",
+    "trace"
     #"zstd_rust",
 ]
 
