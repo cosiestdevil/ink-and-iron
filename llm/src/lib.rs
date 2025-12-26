@@ -1,4 +1,4 @@
-use std::{ffi::CString, sync::Arc};
+use std::{ sync::Arc};
 
 use libloading::Library;
 pub use llm_api::settlement_names::SettlementNameCtx;
@@ -47,16 +47,11 @@ pub async fn settlement_names(
     Ok(res)
 }
 fn _unit_spawn_barks(ops: &LLMOps, tx: Sender<Vec<String>>, ctx: UnitSpawnBarkCtx, temp: f32) {
-    let cstr = CString::new(ctx.civilisation_name.clone()).expect("no interior NULs");
-    let c_ptr = cstr.into_raw();
     let owned = Box::new(llm_api::unit_spawn_barks::OwnedCtx {
         tx,
-        cstr_ptr: c_ptr,
         ctx: ExternUnitSpawnBarkCtx {
-            civilisation_name: c_ptr,
-            unit_type: CString::new(ctx.unit_type.clone())
-                .expect("no interior NULs")
-                .into_raw(),
+            civilisation_name: ByteStr::from_string(&ctx.civilisation_name),
+            unit_type: ByteStr::from_string(&ctx.unit_type),
         },
     });
     let ctx_ptr: *const ExternUnitSpawnBarkCtx = &owned.ctx;
@@ -70,28 +65,11 @@ fn _unit_spawn_barks(ops: &LLMOps, tx: Sender<Vec<String>>, ctx: UnitSpawnBarkCt
         let owned: Box<llm_api::unit_spawn_barks::OwnedCtx> = unsafe { Box::from_raw(user_data) };
         info!("Received unit spawn barks");
         let list = unsafe { core::slice::from_raw_parts(out_names, out_names_len) };
-        //info!("1");
         let mut names = Vec::new();
         for bs in list {
-            let bytes = unsafe { core::slice::from_raw_parts(bs.ptr, bs.len) };
-            if let Ok(s) = core::str::from_utf8(bytes) {
-                // Own if needed:
-                let owned: String = s.to_owned();
-                names.push(owned);
-            } else {
-                // invalid utf-8; skip or record error
-            }
+            names.push(bs.as_string().clone());
         }
-        //info!("2");
         let _ = owned.tx.send(names);
-        //info!("3");
-        if !owned.cstr_ptr.is_null() {
-           // info!("4");
-            unsafe {
-                let _ = CString::from_raw(owned.cstr_ptr);
-            } // drops and frees
-        }
-        //info!("5");
     }
     info!("Calling unit spawn barks");
     let a = ops.unit_spawn_barks;
@@ -100,17 +78,19 @@ fn _unit_spawn_barks(ops: &LLMOps, tx: Sender<Vec<String>>, ctx: UnitSpawnBarkCt
     info!("Called unit spawn barks");
 }
 fn _settlement_names(ops: &LLMOps, tx: Sender<Vec<String>>, ctx: SettlementNameCtx, temp: f32) {
-    let cstr = CString::new(ctx.civilisation_name.clone()).expect("no interior NULs");
-    let c_ptr = cstr.into_raw();
+    let seed_names = llm_api::as_bytestrs(&ctx.seed_names);
     let owned = Box::new(llm_api::settlement_names::OwnedCtx {
         tx,
-        cstr_ptr: c_ptr,
         ctx: ExternSettlementNameCtx {
-            civilisation_name: c_ptr,
-            seed_names: llm_api::settlement_names::as_bytestrs(&ctx.seed_names).as_ptr(),
+            civilisation_name:  ByteStr {
+                ptr: ctx.civilisation_name.as_ptr(),
+                len: ctx.civilisation_name.len(),
+            },
+            seed_names: seed_names.as_ptr(),
             seed_names_len: ctx.seed_names.len(),
         },
     });
+    println!("Created owned settlement names context: {:?}", owned);
     let ctx_ptr: *const ExternSettlementNameCtx = &owned.ctx;
     let user_data = Box::into_raw(owned);
     extern "C" fn settlement_names_callback(
@@ -124,23 +104,12 @@ fn _settlement_names(ops: &LLMOps, tx: Sender<Vec<String>>, ctx: SettlementNameC
         let list = unsafe { core::slice::from_raw_parts(out_names, out_names_len) };
         let mut names = Vec::new();
         for bs in list {
-            let bytes = unsafe { core::slice::from_raw_parts(bs.ptr, bs.len) };
-            if let Ok(s) = core::str::from_utf8(bytes) {
-                // Own if needed:
-                let owned: String = s.to_owned();
-                names.push(owned);
-            } else {
-                // invalid utf-8; skip or record error
-            }
+            info!("Processing ByteStr: ptr={:?}, len={}, {}", bs.ptr, bs.len,bs.as_string());
+            names.push(bs.as_string().clone());
         }
         let _ = owned.tx.send(names);
-        if !owned.cstr_ptr.is_null() {
-            unsafe {
-                let _ = CString::from_raw(owned.cstr_ptr);
-            } // drops and frees
-        }
     }
-    info!("Calling settlement names");
+    info!("Getting settlement names function");
     let a = ops.settlement_names;
     info!("Calling settlement names");
     (a)(ctx_ptr, temp, user_data, settlement_names_callback);
@@ -191,15 +160,15 @@ extern "C" fn no_llm_settlement_names(
     user: *mut settlement_names::OwnedCtx,
     done: SettlementNamesOutput,
 ) {
+    info!("No LLM settlement names called");
     let ctx_owned = unsafe { SettlementNameCtx::from_extern(ctx) };
+    info!("Ctx owned: {:?}", ctx_owned);
     let user: Box<settlement_names::OwnedCtx> = unsafe { Box::from_raw(user) };
+    info!("User owned");
     let bytestrs: Vec<ByteStr> = ctx_owned
         .seed_names
         .iter()
-        .map(|s| ByteStr {
-            ptr: s.as_ptr(),
-            len: s.len(),
-        })
+        .map(|s| ByteStr::from_string(s))
         .collect();
     let user = Box::into_raw(user);
     done(bytestrs.as_ptr(), bytestrs.len(), user, StatusCode::OK);
@@ -217,10 +186,7 @@ extern "C" fn no_llm_unit_spawn_barks(
         format!("{} is ready for battle!", ctx_owned.unit_type),
     ]
     .iter()
-    .map(|s| ByteStr {
-        ptr: s.as_ptr(),
-        len: s.len(),
-    })
+    .map(|s| ByteStr::from_string(s))
     .collect();
     let user = Box::into_raw(user);
     done(bytestrs.as_ptr(), bytestrs.len(), user, StatusCode::OK);
