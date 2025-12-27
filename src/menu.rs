@@ -3,7 +3,7 @@ use bevy_egui::{EguiContexts, EguiPrimaryContextPass};
 use bevy_kira_audio::{AudioChannel, AudioControl};
 use menu::Settings;
 
-use crate::{AppState, AudioSettings, Civilisation, GameState, Music};
+use crate::{AppState, AudioSettings, Civilisation, GameState, LLMSettings, Music};
 pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
@@ -121,12 +121,14 @@ fn settings_menu(
     mut contexts: EguiContexts,
     mut next_menu_state: ResMut<NextState<MenuState>>,
     mut audio_settings: ResMut<bevy_persistent::Persistent<AudioSettings>>,
+    mut llm_settings: ResMut<bevy_persistent::Persistent<LLMSettings>>,
     mut temp_settings: Local<Option<::menu::Settings>>,
     music: Res<AudioChannel<Music>>,
 ) {
     let ctx = contexts.ctx_mut().unwrap();
     let temp_settings = temp_settings.get_or_insert_with(|| Settings {
         music_volume: audio_settings.music_volume,
+        llm_mode: llm_settings.llm_mode.into(),
     });
     let action = menu::settings_menu(ctx, MENU_OFFSET_X, MENU_WIDTH, temp_settings);
     music.set_volume(crate::volume_from_slider(temp_settings.music_volume));
@@ -138,6 +140,11 @@ fn settings_menu(
                     settings.music_volume = temp_settings.music_volume;
                 })
                 .expect("Failed to save audio settings");
+            llm_settings
+                .update(|settings| {
+                    settings.llm_mode = temp_settings.llm_mode.into();
+                })
+                .expect("Failed to save LLM settings");
             next_menu_state.set(MenuState::Main);
         }
         menu::SettingsMenuAction::Return => {
