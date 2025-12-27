@@ -66,8 +66,8 @@ struct Args {
     seed: Option<String>,
     #[arg(long, default_value_t = WorldType::Default)]
     world_type: WorldType,
-    #[arg(long, default_value_t = LLMMode::None)]
-    llm_mode: LLMMode,
+    #[arg(long)]
+    llm_mode: Option<LLMMode>,
 }
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
 pub(crate) enum AppState {
@@ -80,7 +80,7 @@ pub(crate) enum AppState {
 mod logs;
 mod menu;
 #[derive(Resource)]
-struct LlmCpu(LLMMode);
+struct LlmModeOverride(Option<LLMMode>);
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     App::new()
@@ -117,8 +117,8 @@ fn main() -> anyhow::Result<()> {
         .init_resource::<InputFocus>()
         .init_resource::<crate::pathfinding::PathFinding>()
         .init_resource::<LoadedFolders>()
-        .insert_resource(LlmCpu(args.llm_mode))
         .insert_resource(Seed(args.seed.clone()))
+        .insert_resource(LlmModeOverride(args.llm_mode))
         //.insert_resource(GameState::new(2))
         .insert_resource::<Random<RandomRng>>(Random(None))
         .insert_resource(Selection::None)
@@ -170,7 +170,7 @@ struct LoadedFolders {
 fn load_civs(asset_server: Res<AssetServer>, mut folders: ResMut<LoadedFolders>) {
     folders.civs = Some(asset_server.load_folder("civilisations"));
 }
-fn load_settings(mut commands: Commands) {
+fn load_settings(mut commands: Commands, llm_mode_override: Res<LlmModeOverride>) {
     let config_dir = dirs::config_dir().unwrap().join(env!("CARGO_PKG_NAME"));
     commands.insert_resource(
         Persistent::<AudioSettings>::builder()
@@ -181,6 +181,21 @@ fn load_settings(mut commands: Commands) {
             .build()
             .expect("Failed to init audio settings"),
     );
+    let mut llm_settings = Persistent::<LLMSettings>::builder()
+        .name("llm settings")
+        .format(StorageFormat::Toml)
+        .path(config_dir.join("llm_settings.toml"))
+        .default(LLMSettings::default())
+        .build()
+        .expect("Failed to init llm settings");
+    if let Some(llm_override) = llm_mode_override.0 {
+        llm_settings
+            .update(|settings| {
+                settings.llm_mode = llm_override;
+            })
+            .expect("Failed to override llm mode from command line");
+    }
+    commands.insert_resource(llm_settings);
 }
 fn loaded(
     mut next_state: ResMut<NextState<AppState>>,
@@ -206,9 +221,20 @@ struct Seed(Option<String>);
 struct AudioSettings {
     music_volume: f32,
 }
+#[derive(Resource, serde::Serialize, serde::Deserialize, Clone)]
+struct LLMSettings {
+    llm_mode: LLMMode,
+}
 impl Default for AudioSettings {
     fn default() -> Self {
         AudioSettings { music_volume: 1.0 }
+    }
+}
+impl Default for LLMSettings {
+    fn default() -> Self {
+        LLMSettings {
+            llm_mode: LLMMode::None,
+        }
     }
 }
 
