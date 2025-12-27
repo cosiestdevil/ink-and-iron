@@ -51,6 +51,13 @@ pub fn main_menu(ctx: &mut egui::Context, offset_x: f32, width: f32) -> MainMenu
 }
 pub struct Settings {
     pub music_volume: f32,
+    pub llm_mode:LLMMode
+}
+#[derive(PartialEq, Eq, Clone, Copy)]
+pub enum LLMMode {
+    Cuda,
+    Cpu,
+    None,
 }
 pub enum SettingsMenuAction {
     None,
@@ -84,6 +91,18 @@ pub fn settings_menu(
                         if ui.add(slider).changed() {
                             // Apply to the actual audio channel
                         }
+                        ui.add_space(4.0);
+                        egui::ComboBox::from_label("LLM Mode")
+                            .selected_text(match settings.llm_mode {
+                                LLMMode::Cuda => "CUDA",
+                                LLMMode::Cpu => "CPU",
+                                LLMMode::None => "None",
+                            })
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut settings.llm_mode, LLMMode::Cuda, "CUDA");
+                                ui.selectable_value(&mut settings.llm_mode, LLMMode::Cpu, "CPU");
+                                ui.selectable_value(&mut settings.llm_mode, LLMMode::None, "None");
+                            });
                         ui.add_space(4.0);
                         if ui.button("Save").clicked() {
                             action = SettingsMenuAction::Save;
