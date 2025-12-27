@@ -9,6 +9,7 @@ use bevy::{
     state::state::OnEnter,
 };
 use bevy_easings::Ease;
+use bevy_persistent::Persistent;
 use bevy_rts_camera::Ground;
 use bevy_tokio_tasks::TokioTasksRuntime;
 use clap::ValueEnum;
@@ -18,7 +19,7 @@ use rand::Rng;
 use std::{collections::HashMap, ops::Deref};
 pub use world_generation::*;
 
-use crate::{AppState, Cell, CellHighlight, GameState, LlmCpu, Random, Selection, Unit, llm};
+use crate::{AppState, Cell, CellHighlight, GameState, LLMSettings,Random, Selection, Unit, llm};
 #[derive(Resource, Default)]
 pub struct WorldMap(pub Option<world_generation::WorldMap>);
 
@@ -106,10 +107,10 @@ fn generate_unit_spawn_barks(
     mut rng: ResMut<Random<crate::RandomRng>>,
     runtime: ResMut<TokioTasksRuntime>,
     mut game_state: ResMut<GameState>,
-    llm_cpu: Res<LlmCpu>,
+    llm_cpu: Res<Persistent<LLMSettings>>,
 ) {
     let temp = rng.0.as_mut().unwrap().random_range(0.3..0.5);
-    let llm_cpu = llm_cpu.0;
+    let llm_cpu = llm_cpu.llm_mode;
     for player in game_state.players.values_mut() {
         let player_id = player.id;
         for unit in player.civ.units.iter() {
@@ -168,10 +169,10 @@ fn generate_settlement_name(
     mut rng: ResMut<Random<crate::RandomRng>>,
     runtime: ResMut<TokioTasksRuntime>,
     game_state: Res<GameState>,
-    llm_cpu: Res<LlmCpu>,
+    llm_cpu: Res<Persistent<LLMSettings>>,
 ) {
     let temp = rng.0.as_mut().unwrap().random_range(0.3..0.5);
-    let llm_cpu = llm_cpu.0;
+    let llm_cpu = llm_cpu.llm_mode;
     for player in game_state.players.values() {
         let civ_name = player.settlement_context.civilisation_name.clone();
         let civ_description = player.settlement_context.description.clone();
