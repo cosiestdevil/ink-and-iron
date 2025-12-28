@@ -16,6 +16,7 @@ permissions:
 env:
   ARTIFACT_BASENAME: "ink-and-iron"
   CUDA_COMPUTE_CAP: "75"
+  STEAM_APP_ID: ${{ vars.STEAM_APP_ID }}
 
 jobs:
   build-linux-llm-cuda:
