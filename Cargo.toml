@@ -2,6 +2,7 @@
 name = "ink-and-iron"
 edition = "2024"
 publish = false
+build = "build.rs"
 [workspace]
 members = ["helpers","llm-api", "llm-provider", "llm-provider-cpu", "llm-provider-cuda", "menu", "pathfinding", "world-generation"]
 [workspace.dependencies]
@@ -45,7 +46,9 @@ dirs = "6.0.0"
 bevy-panic-handler = "6.0.0"
 thiserror = "2.0.17"
 bevy-steamworks = "0.15.0"
-dotenvy_macro = "0.15.7"
+
+[build-dependencies]
+dotenvy = "0.15.7"
 
 [dependencies.bevy]
 version = "0.17.2"

@@ -80,7 +80,7 @@ mod logs;
 mod menu;
 #[derive(Resource)]
 struct LlmModeOverride(Option<LLMMode>);
-const STEAM_APP_ID: u32 = match u32::from_str_radix(dotenvy_macro::dotenv!("STEAM_APP_ID"), 10){
+const STEAM_APP_ID: u32 = match u32::from_str_radix(env!("STEAM_APP_ID"), 10){
     Ok(id) => id,
     Err(_) => panic!("STEAM_APP_ID environment variable not set or invalid. Please set it to your Steam App ID."),
 };
