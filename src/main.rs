@@ -1,9 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![allow(clippy::too_many_arguments)]
 use std::{
-    collections::{HashMap, VecDeque},
-    path::Path,
-    time::Duration,
+    collections::{HashMap, VecDeque}, env, path::Path, time::Duration
 };
 
 use crate::{
@@ -31,6 +29,7 @@ use bevy_kira_audio::prelude::*;
 use bevy_persistent::{Persistent, StorageFormat};
 use bevy_prototype_lyon::plugin::ShapePlugin;
 use bevy_rts_camera::{RtsCamera, RtsCameraControls, RtsCameraPlugin};
+use bevy_steamworks::SteamworksPlugin;
 use bevy_tokio_tasks::TokioTasksRuntime;
 use clap::Parser;
 use colorgrad::Gradient;
@@ -81,9 +80,18 @@ mod logs;
 mod menu;
 #[derive(Resource)]
 struct LlmModeOverride(Option<LLMMode>);
+const STEAM_APP_ID: u32 = match u32::from_str_radix(dotenvy_macro::dotenv!("STEAM_APP_ID"), 10){
+    Ok(id) => id,
+    Err(_) => panic!("STEAM_APP_ID environment variable not set or invalid. Please set it to your Steam App ID."),
+};
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
+    #[cfg(not(debug_assertions))]
+    if bevy_steamworks::restart_app_if_necessary(STEAM_APP_ID.into()){
+        return Ok(());
+    }
     App::new()
+        .add_plugins(SteamworksPlugin::init_app(STEAM_APP_ID).unwrap())
         .add_plugins((
             DefaultPlugins
                 .set(WindowPlugin {
