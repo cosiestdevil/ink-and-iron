@@ -253,7 +253,8 @@ jobs:
         run: |
           mv assets target/assets
           mv credits target/credits
-          zip -r ${{env.ARTIFACT_BASENAME}}-linux.zip target/
+          cd target
+          zip -r "../${{env.ARTIFACT_BASENAME}}-linux.zip" .
       - name: Collect linux bin
         uses: actions/upload-artifact@v4
         with:
@@ -291,7 +292,8 @@ jobs:
         run: |
           mv assets target/assets
           mv credits target/credits
-          zip -r ${{env.ARTIFACT_BASENAME}}-windows.zip target/
+          cd target
+          zip -r "../${{env.ARTIFACT_BASENAME}}-windows.zip" .
       - name: Collect windows bin
         uses: actions/upload-artifact@v4
         with:
