@@ -228,7 +228,54 @@ jobs:
           path: |
             target/release/steam_api64.dll
 
-
+  build-steam-release:
+    runs-on: ubuntu-latest
+    needs: [build-linux-llm-cuda, build-linux-llm-cpu, build-linux-bin, build-windows-llm-cuda, build-windows-llm-cpu, build-windows-bin]
+    steps:
+      - name: Checkout (full history & tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Compute version (inline)
+        id: version
+        shell: bash
+        run: |
+          chmod +x ./version.sh
+          ./version.sh >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v5
+        with:
+          path: target/windows
+          pattern: ${{steps.version.outputs.tag}}-windows-*
+          merge-multiple: true
+      - uses: actions/download-artifact@v5
+        with:
+          path: target/linux
+          pattern: ${{steps.version.outputs.tag}}-linux-*
+          merge-multiple: true
+      - name: Prepare files
+        id: collect
+        run: |
+          cp assets target/windows/assets
+          cp assets target/linux/assets
+          cp credits target/windows/credits
+          cp credits target/linux/credits
+      - uses: CyberAndrii/steam-totp@v1
+        name: Generate TOTP
+        id: steam-totp
+        with:
+          shared_secret: ${{ secrets.STEAM_SHARED_SECRET }}
+      - uses: game-ci/steam-deploy@v3
+        with:
+          username: ${{ secrets.STEAM_USERNAME }}
+          password: ${{ secrets.STEAM_PASSWORD }}
+          totp: ${{ steps.steam-totp.outputs.code }}
+          appId: ${{ vars.STEAM_APP_ID }}
+          buildDescription: ${{steps.version.outputs.tag}}
+          rootPath: target
+          depot1Path: windows
+          depot2Path: linux
+          releaseBranch: experimental
   build-linux-release:
     runs-on: ubuntu-latest
     needs: [build-linux-llm-cuda, build-linux-llm-cpu, build-linux-bin]
