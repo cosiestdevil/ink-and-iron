@@ -354,6 +354,11 @@ fn spawn_world(
     //         ..default()
     //     }
     //     .build();
+    commands.insert_resource(AmbientLight {
+        color: Color::srgb_u8(58, 135, 184),
+        brightness: 20000.0,
+        ..default()
+    });
     commands.spawn((
         DirectionalLight {
             shadows_enabled: true,
