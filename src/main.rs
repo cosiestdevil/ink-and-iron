@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![allow(clippy::too_many_arguments)]
+#![forbid(unsafe_code)]
 use std::{
     collections::{HashMap, VecDeque},
     env,

@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 use glam::Vec2;
 use glam::Vec3Swizzles;
 use petgraph::Graph;

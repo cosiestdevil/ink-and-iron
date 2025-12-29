@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},

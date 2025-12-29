@@ -1,6 +1,6 @@
-use std::fmt::Display;
-
+#![forbid(unsafe_code)]
 use egui::{Align2, Area, CentralPanel, Frame, Margin};
+use std::fmt::Display;
 
 pub enum MainMenuAction {
     None,
