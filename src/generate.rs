@@ -19,7 +19,7 @@ use rand::Rng;
 use std::{collections::HashMap, ops::Deref};
 pub use world_generation::*;
 
-use crate::{AppState, Cell, CellHighlight, GameState, LLMSettings,Random, Selection, Unit, llm};
+use crate::{AppState, Cell, CellHighlight, GameState, LLMSettings, Random, Selection, Unit, llm};
 #[derive(Resource, Default)]
 pub struct WorldMap(pub Option<world_generation::WorldMap>);
 

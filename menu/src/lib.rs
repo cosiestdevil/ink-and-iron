@@ -51,7 +51,7 @@ pub fn main_menu(ctx: &mut egui::Context, offset_x: f32, width: f32) -> MainMenu
 }
 pub struct Settings {
     pub music_volume: f32,
-    pub llm_mode:LLMMode
+    pub llm_mode: LLMMode,
 }
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum LLMMode {

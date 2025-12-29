@@ -1,7 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![allow(clippy::too_many_arguments)]
 use std::{
-    collections::{HashMap, VecDeque}, env, path::Path, time::Duration
+    collections::{HashMap, VecDeque},
+    env,
+    path::Path,
+    time::Duration,
 };
 
 use crate::{
@@ -80,14 +83,16 @@ mod logs;
 mod menu;
 #[derive(Resource)]
 struct LlmModeOverride(Option<LLMMode>);
-const STEAM_APP_ID: u32 = match u32::from_str_radix(env!("STEAM_APP_ID"), 10){
+const STEAM_APP_ID: u32 = match u32::from_str_radix(env!("STEAM_APP_ID"), 10) {
     Ok(id) => id,
-    Err(_) => panic!("STEAM_APP_ID environment variable not set or invalid. Please set it to your Steam App ID."),
+    Err(_) => panic!(
+        "STEAM_APP_ID environment variable not set or invalid. Please set it to your Steam App ID."
+    ),
 };
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     #[cfg(not(debug_assertions))]
-    if bevy_steamworks::restart_app_if_necessary(STEAM_APP_ID.into()){
+    if bevy_steamworks::restart_app_if_necessary(STEAM_APP_ID.into()) {
         return Ok(());
     }
     App::new()

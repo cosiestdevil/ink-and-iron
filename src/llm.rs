@@ -1,6 +1,6 @@
 use clap::ValueEnum;
 pub use llm::*;
-#[derive(Clone, Copy, ValueEnum, Debug,serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, ValueEnum, Debug, serde::Serialize, serde::Deserialize)]
 pub enum LLMMode {
     None = 0,
     Cpu = 1,

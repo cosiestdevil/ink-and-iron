@@ -1,4 +1,4 @@
-fn main(){
+fn main() {
     if std::env::var("STEAM_APP_ID").is_err() {
         eprintln!("cargo:warning=STEAM_APP_ID not set in environment; loading from .env file");
         // Loads from .env in the crate root by default
