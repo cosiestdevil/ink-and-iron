@@ -219,10 +219,10 @@ jobs:
       - name: Prepare files
         id: collect
         run: |
-          cp assets target/windows/assets
-          cp assets target/linux/assets
-          cp credits target/windows/credits
-          cp credits target/linux/credits
+          cp -r assets target/windows/assets
+          cp -r assets target/linux/assets
+          cp -r credits target/windows/credits
+          cp -r credits target/linux/credits
       - uses: CyberAndrii/steam-totp@v1
         name: Generate TOTP
         id: steam-totp
