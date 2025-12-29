@@ -1004,6 +1004,7 @@ fn click_unit(
     mut commands: Commands,
     mut selection: ResMut<Selection>,
     mut units: Query<&mut Unit>,
+    mut random: ResMut<Random<RandomRng>>,
     game_state: Res<GameState>,
     world_map: Res<WorldMap>,
     pathfinding: Res<crate::pathfinding::PathFinding>,
@@ -1029,13 +1030,23 @@ fn click_unit(
                     if let Some(result) = result {
                         let distance = result.len() - 1;
                         if distance <= attacker.range {
-                            defender.health -= 1.0;
+                            let damage = random
+                                .0
+                                .as_mut()
+                                .unwrap()
+                                .sample(Uniform::new(1.0, 3.0).unwrap());
+                            defender.health -= damage;
                             if defender.health <= 0.0 {
                                 commands.entity(event.entity).despawn();
                             }
                         }
                         if distance <= defender.range {
-                            attacker.health -= 1.0;
+                            let damage = random
+                                .0
+                                .as_mut()
+                                .unwrap()
+                                .sample(Uniform::new(0.5, 1.5).unwrap());
+                            attacker.health -= damage;
                             if attacker.health <= 0.0 {
                                 commands.entity(entity).despawn();
                             }
