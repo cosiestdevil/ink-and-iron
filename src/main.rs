@@ -45,8 +45,8 @@ use serde::Deserialize;
 use thiserror::Error;
 mod generate;
 mod llm;
+mod minimap;
 mod pathfinding;
-
 #[derive(Parser, Debug)]
 struct Args {
     #[arg(long, default_value_t = 16.0)]
@@ -145,6 +145,7 @@ fn main() -> anyhow::Result<()> {
                 setup_rng,
                 archive_old_logs,
                 load_civs,
+                minimap::setup,
             ),
         )
         .add_systems(
@@ -153,7 +154,10 @@ fn main() -> anyhow::Result<()> {
         )
         .add_systems(Update, loaded.run_if(in_state(AppState::Loading)))
         .add_systems(OnExit(AppState::Loading), remove_startup_screen)
-        .add_systems(OnEnter(AppState::InGame), startup)
+        .add_systems(
+            OnEnter(AppState::InGame),
+            (startup, minimap::spawn_minimap_camera),
+        )
         .add_systems(
             Update,
             (

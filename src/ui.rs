@@ -8,7 +8,7 @@ use bevy_egui::{
     PrimaryEguiContext, egui,
 };
 
-use crate::{AppState, GameState, Selection, SettlementCenter, TurnStart, Unit};
+use crate::{AppState, GameState, Selection, SettlementCenter, TurnStart, Unit, minimap};
 
 pub struct UIPlugin;
 impl Plugin for UIPlugin {
@@ -54,16 +54,27 @@ fn ui_example_system(
     mut settlements: Query<&mut SettlementCenter>,
     mut units: Query<&mut Unit>,
     mut turn_start: MessageWriter<TurnStart>,
+    minimap: Res<minimap::MinimapImage>,
     time: Res<Time>,
 ) -> Result {
+    let tex_id = contexts.image_id(&**minimap).unwrap();
     let ctx = contexts.ctx_mut()?;
-
+    let minimap_size = egui::vec2(512.0, 288.0);
     let mut left = egui::SidePanel::left("left_panel")
         .resizable(true)
         .show(ctx, |ui| {
             egui::TopBottomPanel::bottom("my_side_panel_bottom")
-                .exact_height(ui.available_height() / 5.0)
+                .exact_height((ui.available_height() / 5.0) + 144.0)
                 .show_inside(ui, |ui| {
+                    let image =
+                        egui::Image::new(egui::load::SizedTexture::new(tex_id, minimap_size)).uv(
+                            egui::Rect::from_min_max(
+                                egui::pos2(0.0, 1.0), // <-- note Y is 1 here
+                                egui::pos2(1.0, 0.0), // <-- and 0 here
+                            ),
+                        );
+
+                    ui.add(image);
                     ScrollArea::vertical().show(ui, |ui| {
                         ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
                             let active_player = game_state.active_player;
