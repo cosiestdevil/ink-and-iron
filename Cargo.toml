@@ -40,15 +40,15 @@ tokio = { workspace = true }
 bevy_prototype_lyon = "0.15.0"
 bevy_kira_audio = { version = "0.24.0", features = ["wav"] }
 bevy_easings = "0.17.1"
-llm-api = { workspace = true}
-world-generation = {workspace = true}
-pathfinding = {workspace = true}
-helpers = {workspace = true}
-llm ={ path = "./llm"}
+llm-api = { workspace = true }
+world-generation = { workspace = true }
+pathfinding = { workspace = true }
+helpers = { workspace = true }
+llm = { path = "./llm" }
 menu = { path = "./menu" }
 #bevy_panorbit_camera = { version = "0.33.0", features = ["bevy_egui"] }
 tracing-appender = "0.2.3"
-bevy_rts_camera = { version = "0.12"}
+bevy_rts_camera = { version = "0.12" }
 chrono = "0.4.42"
 zip = "6.0.0"
 bevy-persistent = { version = "0.9.0", features = ["toml"] }
@@ -112,7 +112,7 @@ features = [
     "x11",
     "wayland",
     "debug",
-    "trace"
+    "trace",
     #"zstd_rust",
 ]
 
