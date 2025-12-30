@@ -88,10 +88,18 @@ pub fn a_star(
             if closed_list.iter().any(|n| n.cell_id == n_cell_id) {
                 continue;
             }
+            let current_node = nodes.get(&current.cell_id);
+            if current_node.is_none(){
+                continue;
+            }
+            let next_node = nodes.get(&n_cell_id);
+            if next_node.is_none(){
+                continue;
+            }
             let edges = graph
                 .edges_connecting(
-                    *nodes.get(&current.cell_id).unwrap(),
-                    *nodes.get(&n_cell_id).unwrap(),
+                    *current_node.expect("Current cell not found in node index map"),
+                    *next_node.expect("Neightbour cell not found in node index map"),
                 )
                 .collect::<Vec<_>>();
             if let Some(distance) = edges.first() {
