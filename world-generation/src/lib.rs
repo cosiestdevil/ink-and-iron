@@ -100,6 +100,20 @@ impl WorldMap {
         }
         res
     }
+    pub fn get_cell_shape(&self, id: CellId) -> geo::Polygon {
+        self.polygons.get(&id).unwrap().clone()
+    }
+    pub fn get_vertices_for_cell(&self, id: CellId) -> Vec<Vec2> {
+        let cell = self.voronoi.cell(id.0);
+        cell.iter_vertices()
+            .map(|p| {
+                Vec2::new(
+                    (p.x - cell.site_position().x) as f32 * self.scale,
+                    (p.y - cell.site_position().y) as f32 * self.scale,
+                )
+            })
+            .collect()
+    }
 }
 impl Deref for CellId {
     type Target = usize;
