@@ -1,15 +1,9 @@
 use bevy::{
-    asset::RenderAssetUsages,
-    color::palettes::css::RED,
-    ecs::system::SystemState,
-    input_focus::InputFocus,
-    light::{NotShadowCaster, light_consts::lux},
-    mesh::{Indices, PrimitiveTopology},
-    prelude::*,
-    state::state::OnEnter,
+    asset::RenderAssetUsages, color::palettes::css::{BLACK, RED}, ecs::system::SystemState, input_focus::InputFocus, light::{NotShadowCaster, light_consts::lux}, mesh::{Indices, PrimitiveTopology}, prelude::*, state::state::OnEnter
 };
 use bevy_easings::Ease;
 use bevy_persistent::Persistent;
+use bevy_prototype_lyon::prelude::{ShapeBuilder, ShapeBuilderBase};
 use bevy_rts_camera::Ground;
 use bevy_tokio_tasks::TokioTasksRuntime;
 use clap::ValueEnum;
@@ -17,7 +11,7 @@ use colorgrad::Gradient;
 use llm_api::{settlement_names::SettlementNameCtx, unit_spawn_barks::UnitSpawnBarkCtx};
 use rand::Rng;
 use std::{collections::HashMap, ops::Deref};
-pub use world_generation::*;
+pub use world_generation::{CellId, ToVec2};
 
 use crate::{AppState, Cell, CellHighlight, GameState, LLMSettings, Random, Selection, Unit, llm};
 #[derive(Resource, Default)]
@@ -258,26 +252,26 @@ fn spawn_world(
                 )
             })
             .collect::<Vec<_>>();
+        
+        let polygon = bevy_prototype_lyon::prelude::shapes::Polygon {
+            points: vertices.clone(),
+            closed: true,
+        };
         vertices.push(vertices[0]);
-        // let polygon = bevy_prototype_lyon::prelude::shapes::Polygon {
-        //     points: vertices.clone(),
-        //     closed: true,
-        // };
         // let vertices3: Vec<(Vec3, Vec2)> = vertices
         //     .iter()
         //     .map(|(v, uv)| (v.extend(0.0).xzy(), *uv))
         //     .collect();
         //vertices3.reverse();
         let height = world_map.get_raw_height(&CellId(v_cell.site()));
-
+        let color = g.at(height);
+        assert!(color.to_css_hex() != "#000000");
+        let color = bevy::color::Color::srgba(color.r, color.g, color.b, 1.0); //.lighter(0.2);
         let height_key = (height * 100.0).round() as u8;
         assert!((0.0..=1.0).contains(&height));
         let material = if let Some(mat) = height_material_cache.get(&height_key) {
             mat.clone()
         } else {
-            let color = g.at(height);
-            assert!(color.to_css_hex() != "#000000");
-            let color = bevy::color::Color::srgba(color.r, color.g, color.b, 1.0); //.lighter(0.2);
             //let color = Color::linear_rgba(height, height, height, 1.0);
             let mat = materials.add(StandardMaterial {
                 base_color_texture: Some(parchment_handle.clone()),
@@ -289,7 +283,20 @@ fn spawn_world(
             height_material_cache.insert(height_key, mat.clone());
             mat.clone()
         };
-
+        let cell_shape = ShapeBuilder::with(&polygon)
+            .fill(color.with_saturation(color.saturation()/2.0))
+            .stroke((BLACK, 0.1))
+            .build();
+        //let pos = world_map.get_position_for_cell(CellId(v_cell.site()));
+        commands.spawn((
+            cell_shape,
+            Transform::from_xyz(
+                // Distribute shapes from -X_EXTENT/2 to +X_EXTENT/2.
+                v_cell.site_position().x as f32 * scale,
+                v_cell.site_position().y as f32 * scale,
+                0.0,
+            ),
+        ));
         let scaled_height = height * world_map.height_scale;
         let mesh = build_extruded_with_caps(
             &vertices,
