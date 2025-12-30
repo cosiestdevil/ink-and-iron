@@ -13,16 +13,7 @@ use crate::{
     llm::SettlementNameCtx,
 };
 use bevy::{
-    asset::{AssetLoader, LoadContext, LoadedFolder, io::Reader, ron},
-    camera::Exposure,
-    ecs::system::SystemState,
-    input_focus::InputFocus,
-    light::AtmosphereEnvironmentMapLight,
-    log::LogPlugin,
-    math::bounding::Aabb2d,
-    pbr::Atmosphere,
-    post_process::bloom::Bloom,
-    prelude::*,
+    asset::{AssetLoader, LoadContext, LoadedFolder, io::Reader, ron}, camera::Exposure, ecs::system::SystemState, input_focus::InputFocus, light::AtmosphereEnvironmentMapLight, log::LogPlugin, math::bounding::Aabb2d, mesh::{Indices, PrimitiveTopology}, pbr::Atmosphere, post_process::bloom::Bloom, prelude::*
 };
 use bevy_easings::{Ease, EasingsPlugin};
 use bevy_egui::{
@@ -31,12 +22,16 @@ use bevy_egui::{
 };
 use bevy_kira_audio::prelude::*;
 use bevy_persistent::{Persistent, StorageFormat};
-use bevy_prototype_lyon::plugin::ShapePlugin;
+use bevy_prototype_lyon::{
+    plugin::ShapePlugin,
+    prelude::{ShapeBuilder, ShapeBuilderBase},
+};
 use bevy_rts_camera::{RtsCamera, RtsCameraControls, RtsCameraPlugin};
 use bevy_steamworks::SteamworksPlugin;
 use bevy_tokio_tasks::TokioTasksRuntime;
 use clap::Parser;
 use colorgrad::Gradient;
+use geo::{CoordsIter, unary_union};
 use llm::LLMMode;
 use num::Num;
 use rand::{Rng, SeedableRng, distr::Uniform};
@@ -471,13 +466,10 @@ fn startup(
         //     .sample(Uniform::<Vec2>::new(map_box.0, map_box.1).unwrap());
         // let cell_id = world_map.get_cell_for_position(pos);
         if let Some(cell_id) = cell_id {
+            //let cell_vertices = world_map.get_vertices_for_cell(cell_id);
             let pos = world_map.get_position_for_cell(cell_id);
             let player_mat = materials.add(player.color);
             let settlement_mesh = meshes.add(Cuboid::from_length(world_map.entity_scale));
-            // let unit_mesh = meshes.add(Cylinder::new(
-            //     world_map.entity_scale,
-            //     world_map.entity_scale,
-            // ));
             let name = player
                 .settlement_names
                 .pop()
@@ -488,6 +480,8 @@ fn startup(
                 production: 1.0,
                 construction: None,
                 cell: cell_id,
+                turns_till_growth: 1,
+                controlled_cells: world_map.get_neighbours(cell_id),
                 available_constructions: player
                     .civ
                     .units
@@ -501,37 +495,10 @@ fn startup(
                             MeshMaterial3d(player_mat.clone()),
                         ))
                     })
-                    .chain(vec![
-                        //     ConstructionJob::Unit(UnitConstuction {
-                        //         name: "Fighter".to_string(),
-                        //         cost: 2.0,
-                        //         progress: 0.0,
-                        //         template: Box::new(UnitTemplate {
-                        //             mesh: Mesh3d(unit_mesh),
-                        //             material: MeshMaterial3d(player_mat.clone()),
-                        //             unit: Unit {
-                        //                 name: "Fighter".to_string(),
-                        //                 max_health: 10.0,
-                        //                 health: 10.0,
-                        //                 range: 1,
-                        //                 speed: 5.0,
-                        //                 used_speed: 0.0,
-                        //                 current_cell: cell_id,
-                        //                 next_cell: None,
-                        //                 goal: None,
-                        //                 move_timer: None,
-                        //                 controller: player.id,
-                        //                 icon: contexts.add_image(EguiTextureHandle::Strong(
-                        //                     asset_server.load("icons/fighter.png"),
-                        //                 )),
-                        //             },
-                        //         }),
-                        //     }),
-                        ConstructionJob::Sink(SinkConstuction {
-                            cost: 5.0,
-                            progress: 0.0,
-                        }),
-                    ])
+                    .chain(vec![ConstructionJob::Sink(SinkConstuction {
+                        cost: 5.0,
+                        progress: 0.0,
+                    })])
                     .collect::<Vec<_>>(),
             };
             let camera_entity = commands
@@ -585,6 +552,15 @@ fn startup(
                 ))
                 .id();
             player.camera_entity = Some(camera_entity);
+            let mut controlled_polys = Vec::new();
+            for neighbour in settlment.controlled_cells.iter() {
+                controlled_polys.push(world_map.get_cell_shape(*neighbour));
+            }
+            let controlled_vertices = get_hull(controlled_polys, pos.xz(), scale);
+            let polygon = bevy_prototype_lyon::prelude::shapes::Polygon {
+                points: controlled_vertices.clone(),
+                closed: true,
+            };
 
             let mut settlement = commands.spawn((
                 Mesh3d(settlement_mesh),
@@ -592,11 +568,186 @@ fn startup(
                 Transform::from_translation(pos),
                 settlment,
             ));
+            settlement.observe(settlement_grows);
             settlement.observe(click_settlement);
+            let settlement_entity = settlement.id();
+            commands.spawn((
+                minimap::MinimapControlledArea(settlement_entity),
+                ShapeBuilder::with(&polygon).fill(player.color).build(),
+                Transform::from_translation(pos.xzy().with_z(4.0)),
+            ));
+            let ribbons_vertices = controlled_vertices.iter().map(|v|v.extend(0.0).xzy()).collect::<Vec<_>>();
+            let ribbon_mesh = polyline_ribbon_mesh_3d(&ribbons_vertices,0.1,Vec3::Y);
+            commands.spawn((
+                ControlledArea(settlement_entity),
+                Mesh3d(meshes.add(ribbon_mesh)),
+                MeshMaterial3d(player_mat.clone()),
+                Transform::from_translation(pos.with_y(pos.y+2.0))
+            ));
         }
     }
 
     // Egui camera.
+}
+fn get_hull(polys: Vec<geo::Polygon>, offset: Vec2, scale: f32) -> Vec<Vec2> {
+    let multi_polygon = unary_union(polys.iter());
+    multi_polygon
+        .exterior_coords_iter()
+        .map(|c| (vec2(c.x as f32, c.y as f32) * scale) - offset)
+        .collect::<Vec<_>>()
+}
+#[derive(EntityEvent)]
+struct SettlementGrows {
+    #[event_target]
+    target_entity: Entity,
+}
+#[derive(Component)]
+pub struct ControlledArea(pub Entity);
+fn settlement_grows(
+    event: On<SettlementGrows>,
+    mut settlements: Query<&mut SettlementCenter>,
+    minimap_controlled_areas: Query<(Entity, &minimap::MinimapControlledArea)>,
+    controlled_areas:Query<(Entity,&ControlledArea)>,
+    world_map: Res<WorldMap>,
+    mut commands: Commands,
+    pathfinding: Res<crate::pathfinding::PathFinding>,
+    game_state: Res<GameState>,
+    mut meshes: ResMut<Assets<Mesh>>
+) {
+    let scale = world_map.scale;
+    let crate::pathfinding::PathFinding { graph, nodes } = pathfinding.as_ref();
+    let entity = event.target_entity;
+    let mut settlement = settlements.get_mut(entity).unwrap();
+
+    if settlement.controller != game_state.active_player {
+        return;
+    }
+    let player = game_state.players.get(&settlement.controller).unwrap();
+    let pos = world_map.get_position_for_cell(settlement.cell);
+    let controlled_cells = &settlement.controlled_cells;
+    let mut un_controlled_cells = vec![];
+    for cell in controlled_cells.iter() {
+        let neighbours = world_map.get_neighbours(*cell);
+        let un_controlled_neighbours = neighbours
+            .into_iter()
+            .filter(|n| !controlled_cells.contains(n) && *n != settlement.cell)
+            .collect::<Vec<_>>();
+        if un_controlled_neighbours.is_empty() {
+            continue;
+        }
+        un_controlled_cells.extend(un_controlled_neighbours);
+    }
+    let mut closest_distance = u8::MAX;
+    let mut closest_cell = None;
+    for cell in un_controlled_cells.iter() {
+        let path = crate::pathfinding::a_star(settlement.cell, *cell, graph, nodes, &world_map);
+        if path.is_none() {
+            continue;
+        }
+        let path = path.unwrap();
+        let distance = path.len() as u8;
+        if distance < closest_distance {
+            closest_distance = distance;
+            closest_cell = Some(*cell);
+        }
+    }
+    if closest_cell.is_none() {
+        return;
+    }
+    let closest_cell = closest_cell.unwrap();
+    settlement.controlled_cells.push(closest_cell);
+    let minimap_controlled_area_entity = minimap_controlled_areas
+        .iter()
+        .find(|(_, area)| area.0 == entity)
+        .map(|(e, _)| e)
+        .unwrap();
+    let controlled_area_entity = controlled_areas
+        .iter()
+        .find(|(_, area)| area.0 == entity)
+        .map(|(e, _)| e)
+        .unwrap();
+    let mut controlled_polys = Vec::new();
+    for neighbour in settlement.controlled_cells.iter() {
+        controlled_polys.push(world_map.get_cell_shape(*neighbour));
+    }
+    let controlled_vertices = get_hull(controlled_polys, pos.xz(), scale);
+    let polygon = bevy_prototype_lyon::prelude::shapes::Polygon {
+        points: controlled_vertices.clone(),
+        closed: true,
+    };
+    let ribbons_vertices = controlled_vertices.iter().map(|v|v.extend(0.0).xzy()).collect::<Vec<_>>();
+    let outline_mesh = polyline_ribbon_mesh_3d(&ribbons_vertices,0.1,Vec3::Y);
+    commands.entity(controlled_area_entity).insert(Mesh3d(meshes.add(outline_mesh)));
+    commands
+        .entity(minimap_controlled_area_entity)
+        .insert(ShapeBuilder::with(&polygon).fill(player.color).build());
+}
+
+pub fn polyline_ribbon_mesh_3d(points: &[Vec3], half_width: f32, up: Vec3) -> Mesh {
+    assert!(points.len() >= 2);
+
+    let up = up.normalize_or_zero();
+
+    let mut positions: Vec<[f32; 3]> = Vec::with_capacity(points.len() * 2);
+    let mut normals: Vec<[f32; 3]> = Vec::with_capacity(points.len() * 2);
+    let mut indices: Vec<u32> = Vec::with_capacity((points.len() - 1) * 6);
+
+    for i in 0..points.len() {
+        let p = points[i];
+
+        let dir_prev = if i > 0 {
+            (p - points[i - 1]).normalize_or_zero()
+        } else {
+            (points[i + 1] - p).normalize_or_zero()
+        };
+
+        let dir_next = if i + 1 < points.len() {
+            (points[i + 1] - p).normalize_or_zero()
+        } else {
+            (p - points[i - 1]).normalize_or_zero()
+        };
+
+        let dir = (dir_prev + dir_next).normalize_or_zero();
+
+        // Side vector gives the width direction: perpendicular to (dir, up)
+        let mut side = dir.cross(up).normalize_or_zero();
+        if side.length_squared() == 0.0 {
+            side = Vec3::X; // fallback if dir || up
+        }
+
+        // Basic miter scaling to reduce corner shrink; clamped to avoid spikes
+        let prev_side = dir_prev.cross(up).normalize_or_zero();
+        let denom = side.dot(prev_side).abs().max(0.2);
+        let miter_scale = (1.0 / denom).min(4.0);
+
+        let offset = side * (half_width * miter_scale);
+
+        let a = p + offset;
+        let b = p - offset;
+
+        positions.push([a.x, a.y, a.z]);
+        positions.push([b.x, b.y, b.z]);
+
+        // Flat ribbon: normals roughly "up"
+        normals.push([up.x, up.y, up.z]);
+        normals.push([up.x, up.y, up.z]);
+    }
+
+    for i in 0..(points.len() - 1) {
+        let v0 = (i * 2) as u32;
+        let v1 = v0 + 1;
+        let v2 = v0 + 2;
+        let v3 = v0 + 3;
+
+        indices.extend_from_slice(&[v0, v2, v1]);
+        indices.extend_from_slice(&[v2, v3, v1]);
+    }
+
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, default());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.insert_indices(Indices::U32(indices));
+    mesh
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -653,7 +804,7 @@ fn turn_start_async(
     mut commands: Commands,
     mut cameras: Query<(&mut Camera, Entity, &mut RtsCameraControls), Without<EguiContext>>,
     mut units: Query<&mut Unit>,
-    mut settlements: Query<&mut SettlementCenter>,
+    mut settlements: Query<(Entity, &mut SettlementCenter)>,
     mut selected: ResMut<Selection>,
     highlights: Query<Entity, With<CellHighlight>>,
     mut game_state: ResMut<GameState>,
@@ -695,9 +846,9 @@ fn turn_start_async(
         for mut unit in units.iter_mut().filter(|u| u.controller == turn_player) {
             unit.used_speed = 0.0;
         }
-        for mut settlement in settlements
+        for (entity, mut settlement) in settlements
             .iter_mut()
-            .filter(|s| s.controller == turn_player)
+            .filter(|(_, s)| s.controller == turn_player)
         {
             let production = settlement.production;
             let cell = settlement.cell;
@@ -746,6 +897,13 @@ fn turn_start_async(
                 for con in settlement.available_constructions.iter_mut() {
                     con.increase();
                 }
+            }
+            settlement.turns_till_growth -= 1;
+            if settlement.turns_till_growth == 0 {
+                settlement.turns_till_growth = 1;
+                commands
+                    .entity(entity)
+                    .trigger(|e| SettlementGrows { target_entity: e });
             }
         }
     }
@@ -1119,6 +1277,8 @@ struct SettlementCenter {
     production: f32,
     available_constructions: Vec<ConstructionJob>,
     name: String,
+    controlled_cells: Vec<CellId>,
+    turns_till_growth: u8,
 }
 trait Construction {
     fn add_progress(&mut self, progress: f32) -> bool;
