@@ -66,6 +66,7 @@ jobs:
         with:
           cuda: "12.9.0"
           method: local
+          use-local-cache: false
           linux-local-args: '["--toolkit"]'
       - name: Cargo build (release)
         run: cargo build --package llm-provider-cuda --release
