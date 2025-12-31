@@ -65,7 +65,8 @@ jobs:
         uses: Jimver/cuda-toolkit@v0.2.29
         with:
           cuda: "12.9.0"
-          method: network
+          method: local
+          linux-local-args: '["--toolkit"]'
       - name: Cargo build (release)
         run: cargo build --package llm-provider-cuda --release
       - name: Collect build outputs
