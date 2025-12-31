@@ -57,6 +57,10 @@ jobs:
           sudo apt-get clean
           docker system prune -af || true
           df -h
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lsb-release
       - name: Install CUDA Toolkit
         uses: Jimver/cuda-toolkit@v0.2.29
         with:
