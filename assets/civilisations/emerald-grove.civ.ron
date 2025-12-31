@@ -1,21 +1,51 @@
 Civilisation(
     name: "Emerald Grove",
     units: [
-        (name: "Owl Bear", default_cost:2.0, health:10.0,range:1,speed:5.0,mesh_path:"meshes/fighter.glb",icon_path:"icons/druid.png",seed_barks:[
-            "Hoot hoot! The forest watches over us.",
-            "A wise choice, indeed.",
-            "May the trees guide your path.",
-        ],description:"The Owl Bear is a mystical creature that embodies the spirit of the forest. With keen eyesight and powerful talons, it serves as a guardian of the Emerald Grove, protecting its inhabitants from harm."),
-        (name: "Archer", default_cost:3.0, health:8.0,range:2,speed:5.0,mesh_path:"meshes/archer.glb",icon_path:"icons/ranger.png",seed_barks:[
-            "The forest is my ally.",
-            "Silent as the night, swift as the wind.",
-            "May my arrows find their mark.",
-        ],description:"The Archer of the Emerald Grove is a master of stealth and precision. Trained in the art of archery from a young age, they use their skills to defend their homeland and maintain the balance of nature."),
-        (name: "Mage", default_cost:4.0, health:6.0,range:2,speed:5.0,mesh_path:"meshes/mage.glb",icon_path:"icons/wizard.png",seed_barks:[
-            "Nature's magic flows through me.",
-            "The forest whispers its secrets.",
-            "Let the power of the earth guide us.",
-        ],description:"The Mage of the Emerald Grove draws their power from the natural world. Through ancient rituals and deep connection to the land, they wield magic that heals, protects, and nurtures the forest and its inhabitants."),
+        (
+            name: "Owl Bear",
+            default_cost: 2.0,
+            health: 10.0,
+            range: 1,
+            speed: 5.0,
+            mesh_path: "meshes/fighter.glb",
+            icon_path: "icons/druid.png",
+            seed_barks: [
+                "Hoot hoot! The forest watches over us.",
+                "A wise choice, indeed.",
+                "May the trees guide your path.",
+            ],
+            description: "The Owl Bear is a mystical creature that embodies the spirit of the forest. With keen eyesight and powerful talons, it serves as a guardian of the Emerald Grove, protecting its inhabitants from harm.",
+        ),
+        (
+            name: "Archer",
+            default_cost: 3.0,
+            health: 8.0,
+            range: 2,
+            speed: 5.0,
+            mesh_path: "meshes/archer.glb",
+            icon_path: "icons/ranger.png",
+            seed_barks: [
+                "The forest is my ally.",
+                "Silent as the night, swift as the wind.",
+                "May my arrows find their mark.",
+            ],
+            description: "The Archer of the Emerald Grove is a master of stealth and precision. Trained in the art of archery from a young age, they use their skills to defend their homeland and maintain the balance of nature.",
+        ),
+        (
+            name: "Mage",
+            default_cost: 4.0,
+            health: 6.0,
+            range: 2,
+            speed: 5.0,
+            mesh_path: "meshes/mage.glb",
+            icon_path: "icons/wizard.png",
+            seed_barks: [
+                "Nature's magic flows through me.",
+                "The forest whispers its secrets.",
+                "Let the power of the earth guide us.",
+            ],
+            description: "The Mage of the Emerald Grove draws their power from the natural world. Through ancient rituals and deep connection to the land, they wield magic that heals, protects, and nurtures the forest and its inhabitants.",
+        ),
     ],
     settlement_name_seeds: [
         "Grove",

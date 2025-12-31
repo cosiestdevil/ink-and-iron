@@ -1,21 +1,51 @@
 Civilisation(
     name: "Luikha Empire",
     units: [
-        (name: "Fighter", default_cost:2.0, health:10.0,range:1,speed:5.0,mesh_path:"meshes/fighter.glb",icon_path:"icons/fighter.png",seed_barks:[
-            "For the glory of the Luikha Empire!",
-            "Stand tall for our dynasty!",
-            "Honor and strength guide my blade.",
-        ],description:"The Fighter of the Luikha Empire is a disciplined warrior, embodying the values of honor and duty. Clad in ornate armor and wielding a finely crafted sword, they serve as the backbone of their civilisation's military forces. Trained in various combat techniques, they fight with unwavering resolve to protect their homeland and uphold the legacy of the empire."),  
-        (name: "Archer", default_cost:3.0, health:8.0,range:2,speed:5.0,mesh_path:"meshes/archer.glb",icon_path:"icons/ranger.png",seed_barks:[
-            "My arrow flies true for the Luikha Empire!",
-            "From afar, I strike with precision.",
-            "The empire's safety is my aim.",
-        ],description:"The Archer of the Luikha Empire is a skilled marksman, trained to defend their realm from a distance. With a keen eye and steady hand, they unleash a volley of arrows upon their enemies, striking with precision and agility. Their loyalty to the empire drives them to protect their people."),
-        (name: "Mage", default_cost:4.0, health:6.0,range:2,speed:5.0,mesh_path:"meshes/mage.glb",icon_path:"icons/wizard.png",seed_barks:[
-            "By the arcane power of the Luikha Empire!",
-            "Magic serves the empire's will.",
-            "Let my spells defend our land.",
-        ],description:"The Mage of the Luikha Empire is a master of arcane arts, wielding powerful magic to safeguard their civilisation. Through rigorous study and practice, they have honed their abilities to cast spells that can turn the tide of battle. Their dedication to the empire fuels their desire to use magic as a force for protection and justice."),
+        (
+            name: "Fighter",
+            default_cost: 2.0,
+            health: 10.0,
+            range: 1,
+            speed: 5.0,
+            mesh_path: "meshes/fighter.glb",
+            icon_path: "icons/fighter.png",
+            seed_barks: [
+                "For the glory of the Luikha Empire!",
+                "Stand tall for our dynasty!",
+                "Honor and strength guide my blade.",
+            ],
+            description: "The Fighter of the Luikha Empire is a disciplined warrior, embodying the values of honor and duty. Clad in ornate armor and wielding a finely crafted sword, they serve as the backbone of their civilisation's military forces. Trained in various combat techniques, they fight with unwavering resolve to protect their homeland and uphold the legacy of the empire.",
+        ),
+        (
+            name: "Archer",
+            default_cost: 3.0,
+            health: 8.0,
+            range: 2,
+            speed: 5.0,
+            mesh_path: "meshes/archer.glb",
+            icon_path: "icons/ranger.png",
+            seed_barks: [
+                "My arrow flies true for the Luikha Empire!",
+                "From afar, I strike with precision.",
+                "The empire's safety is my aim.",
+            ],
+            description: "The Archer of the Luikha Empire is a skilled marksman, trained to defend their realm from a distance. With a keen eye and steady hand, they unleash a volley of arrows upon their enemies, striking with precision and agility. Their loyalty to the empire drives them to protect their people.",
+        ),
+        (
+            name: "Mage",
+            default_cost: 4.0,
+            health: 6.0,
+            range: 2,
+            speed: 5.0,
+            mesh_path: "meshes/mage.glb",
+            icon_path: "icons/wizard.png",
+            seed_barks: [
+                "By the arcane power of the Luikha Empire!",
+                "Magic serves the empire's will.",
+                "Let my spells defend our land.",
+            ],
+            description: "The Mage of the Luikha Empire is a master of arcane arts, wielding powerful magic to safeguard their civilisation. Through rigorous study and practice, they have honed their abilities to cast spells that can turn the tide of battle. Their dedication to the empire fuels their desire to use magic as a force for protection and justice.",
+        ),
     ],
     settlement_name_seeds: [
         "Luikha",
