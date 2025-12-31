@@ -268,7 +268,7 @@ fn spawn_world(
                 )
             })
             .collect::<Vec<_>>();
-        
+
         let polygon = bevy_prototype_lyon::prelude::shapes::Polygon {
             points: vertices.clone(),
             closed: true,
@@ -300,7 +300,7 @@ fn spawn_world(
             mat.clone()
         };
         let cell_shape = ShapeBuilder::with(&polygon)
-            .fill(color.with_saturation(color.saturation()/2.0))
+            .fill(color.with_saturation(color.saturation() / 2.0))
             .stroke((BLACK, 0.1))
             .build();
         //let pos = world_map.get_position_for_cell(CellId(v_cell.site()));
