@@ -62,12 +62,23 @@ jobs:
           docker system prune -af || true
           df -h
       - name: Install CUDA Toolkit
-        uses: Jimver/cuda-toolkit@v0.2.29
-        with:
-          cuda: "12.9.0"
-          method: local
-          use-local-cache: false
-          linux-local-args: '["--toolkit"]'
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates wget gnupg
+
+          # Add NVIDIA CUDA repo for Debian 11
+          wget -O cuda-keyring.deb \
+            https://developer.download.nvidia.com/compute/cuda/repos/debian11/x86_64/cuda-keyring_1.1-1_all.deb
+          dpkg -i cuda-keyring.deb
+          apt-get update
+
+          # Install just the toolkit (not the driver meta-package)
+          apt-get install -y --no-install-recommends cuda-toolkit-12-9
+
+          # Optional: make nvcc visible
+          echo "/usr/local/cuda/bin" >> "$GITHUB_PATH"
+          echo "CUDA_PATH=/usr/local/cuda" >> "$GITHUB_ENV"
+
       - name: Cargo build (release)
         run: cargo build --package llm-provider-cuda --release
       - name: Collect build outputs
