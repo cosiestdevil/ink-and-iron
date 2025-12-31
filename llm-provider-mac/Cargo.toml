@@ -1,0 +1,12 @@
+[package]
+name = "llm-provider-mac"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "llm_provider_mac"
+path = "./src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+llm-provider = {path = "../llm-provider",features = ["metal"]}
