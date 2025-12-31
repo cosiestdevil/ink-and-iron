@@ -20,3 +20,4 @@ once_cell = "*"
 
 [features]
 cuda = ["kalosm-llama/cuda"]
+metal = ["kalosm-llama/metal"]
