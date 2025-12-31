@@ -61,24 +61,31 @@ jobs:
           sudo apt-get clean
           docker system prune -af || true
           df -h
-      - name: Install CUDA Toolkit
+      - name: Install CUDA Toolkit 12.9 (runfile + script PTY)
         run: |
+          set -euxo pipefail
+
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates wget gnupg
+          apt-get install -y --no-install-recommends \
+            ca-certificates wget util-linux
 
-          # Add NVIDIA CUDA repo for Debian 11
-          wget -O cuda-keyring.deb \
-            https://developer.download.nvidia.com/compute/cuda/repos/debian11/x86_64/cuda-keyring_1.1-1_all.deb
-          dpkg -i cuda-keyring.deb
-          apt-get update
+          CUDA_VER="12.9.0"
+          RUNFILE="cuda_12.9.0_575.51.03_linux.run"
 
-          # Install just the toolkit (not the driver meta-package)
-          apt-get install -y --no-install-recommends cuda-toolkit-12-9
+          wget -O cuda.run "https://developer.download.nvidia.com/compute/cuda/${CUDA_VER}/local_installers/${RUNFILE}"
+          chmod +x cuda.run
 
-          # Optional: make nvcc visible
+          # IMPORTANT: wrap with a pseudo-TTY so the installer doesn't fail on /dev/tty in CI containers
+          script -q -e -c "sh ./cuda.run --silent --toolkit --no-opengl-libs --toolkitpath=/usr/local/cuda-${CUDA_VER}" /dev/null
+
+          ln -sfn "/usr/local/cuda-${CUDA_VER}" /usr/local/cuda
+
+          # Make it visible to subsequent steps
           echo "/usr/local/cuda/bin" >> "$GITHUB_PATH"
-          echo "CUDA_PATH=/usr/local/cuda" >> "$GITHUB_ENV"
+          echo "CUDA_HOME=/usr/local/cuda" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
 
+          /usr/local/cuda/bin/nvcc --version
       - name: Cargo build (release)
         run: cargo build --package llm-provider-cuda --release
       - name: Collect build outputs
