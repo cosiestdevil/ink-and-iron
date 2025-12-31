@@ -63,8 +63,6 @@ jobs:
           df -h
       - name: Install CUDA Toolkit 12.9 (runfile + script PTY)
         run: |
-          set -euxo pipefail
-
           apt-get update
           apt-get install -y --no-install-recommends \
             ca-certificates wget util-linux
