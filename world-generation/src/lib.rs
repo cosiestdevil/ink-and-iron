@@ -7,12 +7,13 @@ use std::{
 };
 
 use geo::{Contains, CoordsIter, Polygon, unary_union};
-use glam::{Vec2, Vec3, Vec3Swizzles};
+use glam::{IVec2, Vec2, Vec3, Vec3Swizzles, vec2};
 use noise::{Fbm, NoiseFn, Perlin, RidgedMulti};
 use rand::{
     Rng,
     distr::{Distribution, Uniform},
 };
+use tracing::error;
 use voronoice::*;
 
 use helpers::min_max_componentwise;
@@ -40,11 +41,10 @@ pub struct WorldMap {
     pub entity_scale: f32,
     voronoi: Voronoi,
     cell_height: HashMap<CellId, f32>,
-    #[allow(unused)]
     polygons: HashMap<CellId, geo::Polygon>,
+    vertex_heights: HashMap<IVec2, f32>,
 }
 impl WorldMap {
-    #[allow(unused)]
     pub fn get_cell_for_position(&self, pos: Vec2) -> Option<CellId> {
         for (cell_id, poly) in self.polygons.iter() {
             if poly.contains(&geo::point!(x:(pos.x/self.scale) as f64,y:(pos.y/self.scale) as f64))
@@ -78,8 +78,61 @@ impl WorldMap {
     pub fn iter_cells(&self) -> impl Iterator<Item = VoronoiCell<'_>> {
         self.voronoi.iter_cells()
     }
+
+    fn quantize_key(pos: Vec2) -> IVec2 {
+        const CELL: f32 = 1e-5;
+        let q = pos / CELL;
+        IVec2::new(q.x.round() as i32, q.y.round() as i32)
+    }
     pub fn get_raw_height(&self, id: &CellId) -> f32 {
         *(self.cell_height.get(id).unwrap())
+    }
+    pub fn calc_height_at_vertex(&mut self, pos: Vec2) {
+        let pos_key = Self::quantize_key(pos);
+        if let Some(height) = self.vertex_heights.get(&pos_key) {
+            return;
+        }
+        let res = self.height_at_vertex(pos);
+        self.vertex_heights.insert(pos_key, res);
+    }
+    fn height_at_vertex(&self, pos: Vec2) -> f32 {
+        let cell = self.get_cell_for_position(pos * self.scale);
+        if let Some(cell) = cell {
+            let mut height_map = Vec::new();
+            let cell_pos = self.voronoi.cell(*cell).site_position().to_vec2();
+            let cell_height = self.get_raw_height(&cell);
+            height_map.push((cell_pos, cell_height));
+            for n in self.get_neighbours(cell).iter() {
+                let vertices = self
+                    .voronoi
+                    .cell(**n)
+                    .iter_vertices()
+                    .map(|p| vec2(p.x as f32, p.y as f32))
+                    .collect::<Vec<_>>();
+                if vertices.contains(&pos) {
+                    let cell_pos = self.get_position_for_cell(*n).xz();
+                    let cell_height = self.get_raw_height(n);
+                    height_map.push((cell_pos, cell_height));
+                }
+            }
+            let res = Self::voronoi_vertex_mean(&height_map).unwrap_or(0.0) * self.height_scale;
+            return res;
+        }
+        0.0
+    }
+    pub fn get_height_at_vertex(&self, pos: Vec2) -> f32 {
+        let pos_key = Self::quantize_key(pos);
+        if let Some(height) = self.vertex_heights.get(&pos_key) {
+            return *height;
+        }
+        self.height_at_vertex(pos)
+    }
+    fn voronoi_vertex_mean(sites: &[(Vec2, f32)]) -> Option<f32> {
+        if sites.is_empty() {
+            return None;
+        }
+        let sum: f32 = sites.iter().map(|(_, v)| *v).sum();
+        Some(sum / sites.len() as f32)
     }
     pub fn get_valid_settlement_cells(&self) -> Vec<CellId> {
         let mut res = vec![];
@@ -105,16 +158,10 @@ impl WorldMap {
     }
     pub fn get_vertices_for_cell(&self, id: CellId) -> Vec<Vec2> {
         let cell = self.voronoi.cell(id.0);
-        cell.iter_vertices()
-            .map(|p| {
-                Vec2::new(
-                    (p.x - cell.site_position().x) as f32 * self.scale,
-                    (p.y - cell.site_position().y) as f32 * self.scale,
-                )
-            })
-            .collect()
+        cell.iter_vertices().map(|p| p.to_vec2()).collect()
     }
 }
+
 impl Deref for CellId {
     type Target = usize;
     fn deref(&self) -> &Self::Target {
@@ -399,15 +446,21 @@ pub fn generate_world<R: Rng + Clone>(
             .map(|c| (c.id, 0.5))
             .collect::<HashMap<CellId, f32>>(),
     };
-
-    Ok(WorldMap {
+    let mut world_map = WorldMap {
         scale,
         height_scale: scale * 0.25,
         entity_scale: scale * 0.025,
         voronoi: continents_voronoi,
         cell_height: cells_height,
         polygons: cell_polys,
-    })
+        vertex_heights: HashMap::new(),
+    };
+    for cell in cells.iter() {
+        for vertex in world_map.get_vertices_for_cell(cell.id) {
+            world_map.calc_height_at_vertex(vertex);
+        }
+    }
+    Ok(world_map)
 }
 pub fn normalize_split01_in_place(v: &mut [f32]) -> Option<(f32, f32)> {
     // 1) Scan finite min/max
