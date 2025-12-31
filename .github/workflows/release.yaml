@@ -98,8 +98,8 @@ jobs:
                 curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
               fi
               source /root/.cargo/env
-
               /usr/local/cuda/bin/nvcc --version || true
+              PATH="/usr/local/cuda/bin:$PATH"
               cargo build --package llm-provider-cuda --release
             '
 
