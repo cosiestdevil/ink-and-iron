@@ -57,6 +57,7 @@ jobs:
 
       # Install CUDA on the HOST (Ubuntu). This avoids /dev/tty + Debian/Ubuntu repo mismatch.
       - name: Install CUDA Toolkit
+        id: cuda-toolkit
         uses: Jimver/cuda-toolkit@v0.2.30
         with:
           cuda: "12.9.0"
@@ -81,7 +82,7 @@ jobs:
             -v "$GITHUB_WORKSPACE:/work" \
             -v "$HOME/.cargo:/root/.cargo" \
             -v "$HOME/.rustup:/root/.rustup" \
-            -v "/usr/local/cuda:/usr/local/cuda:ro" \
+            -v "/usr/local/cuda:${{steps.cuda-toolkit.outputs.CUDA_PATH}}:ro" \
             -w /work \
             -e CUDA_HOME=/usr/local/cuda \
             -e PATH="/usr/local/cuda/bin:/root/.cargo/bin:$PATH" \
