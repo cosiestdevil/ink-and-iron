@@ -165,10 +165,15 @@ pub async fn get_llm(llm_mode: LLMMode) -> Arc<LLMHandle> {
 const PRIMARY_LIBRARY: &str = "llm_provider_cuda.dll";
 #[cfg(target_os = "linux")]
 const PRIMARY_LIBRARY: &str = "libllm_provider_cuda.so";
+#[cfg(target_os = "macos")]
+const PRIMARY_LIBRARY:&str = "libllm_provider_mac.dylib";
 #[cfg(target_os = "windows")]
 const CPU_LIBRARY: &str = "llm_provider.dll";
 #[cfg(target_os = "linux")]
 const CPU_LIBRARY: &str = "libllm_provider.so";
+#[cfg(target_os = "macos")]
+const CPU_LIBRARY:&str = "libllm_provider.dylib";
+
 extern "C" fn no_llm_settlement_names(
     ctx: *const ExternSettlementNameCtx,
     _temp: f32,
