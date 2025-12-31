@@ -72,10 +72,11 @@ jobs:
 
           wget -O cuda.run "https://developer.download.nvidia.com/compute/cuda/${CUDA_VER}/local_installers/${RUNFILE}"
           chmod +x cuda.run
-
+          df -h
           # IMPORTANT: wrap with a pseudo-TTY so the installer doesn't fail on /dev/tty in CI containers
           script -q -e -c "sh ./cuda.run --silent --toolkit --no-opengl-libs --toolkitpath=/usr/local/cuda-${CUDA_VER}" /dev/null
-
+          rm cuda.run
+          df -h
           ln -sfn "/usr/local/cuda-${CUDA_VER}" /usr/local/cuda
 
           # Make it visible to subsequent steps
