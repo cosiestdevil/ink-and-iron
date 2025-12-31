@@ -13,7 +13,7 @@ use crate::{
     llm::SettlementNameCtx,
 };
 use bevy::{
-    asset::{AssetLoader, LoadContext, LoadedFolder, io::Reader, ron}, camera::Exposure, ecs::system::SystemState, input_focus::InputFocus, light::AtmosphereEnvironmentMapLight, log::LogPlugin, math::bounding::Aabb2d, mesh::{Indices, PrimitiveTopology}, pbr::Atmosphere, post_process::bloom::Bloom, prelude::*
+    asset::{AssetLoader, LoadContext, LoadedFolder, io::Reader, ron}, camera::{Exposure, visibility::NoFrustumCulling}, ecs::system::SystemState, input_focus::InputFocus, light::AtmosphereEnvironmentMapLight, log::LogPlugin, math::bounding::Aabb2d, mesh::{Indices, PrimitiveTopology}, pbr::Atmosphere, post_process::bloom::Bloom, prelude::*
 };
 use bevy_easings::{Ease, EasingsPlugin};
 use bevy_egui::{
@@ -576,13 +576,14 @@ fn startup(
                 ShapeBuilder::with(&polygon).fill(player.color).build(),
                 Transform::from_translation(pos.xzy().with_z(4.0)),
             ));
-            let ribbons_vertices = controlled_vertices.iter().map(|v|v.extend(0.0).xzy()).collect::<Vec<_>>();
+            let ribbons_vertices = controlled_vertices.iter().map(|v|v.extend(world_map.get_height_at_vertex((*v+pos.xz())/world_map.scale)).xzy()).collect::<Vec<_>>();
             let ribbon_mesh = polyline_ribbon_mesh_3d(&ribbons_vertices,0.1,Vec3::Y);
             commands.spawn((
                 ControlledArea(settlement_entity),
                 Mesh3d(meshes.add(ribbon_mesh)),
                 MeshMaterial3d(player_mat.clone()),
-                Transform::from_translation(pos.with_y(pos.y+2.0))
+                NoFrustumCulling,
+                Transform::from_translation(pos.with_y(0.01))
             ));
         }
     }
@@ -675,7 +676,7 @@ fn settlement_grows(
         points: controlled_vertices.clone(),
         closed: true,
     };
-    let ribbons_vertices = controlled_vertices.iter().map(|v|v.extend(0.0).xzy()).collect::<Vec<_>>();
+    let ribbons_vertices = controlled_vertices.iter().map(|v|v.extend(world_map.get_height_at_vertex((*v+pos.xz())/world_map.scale)).xzy()).collect::<Vec<_>>();
     let outline_mesh = polyline_ribbon_mesh_3d(&ribbons_vertices,0.1,Vec3::Y);
     commands.entity(controlled_area_entity).insert(Mesh3d(meshes.add(outline_mesh)));
     commands
@@ -686,51 +687,75 @@ fn settlement_grows(
 pub fn polyline_ribbon_mesh_3d(points: &[Vec3], half_width: f32, up: Vec3) -> Mesh {
     assert!(points.len() >= 2);
 
-    let up = up.normalize_or_zero();
+    // 1) Compute per-point tangents (smoothed using neighbors)
+    let mut tangents = Vec::with_capacity(points.len());
+    for i in 0..points.len() {
+        let prev = if i > 0 { points[i - 1] } else { points[i] };
+        let next = if i + 1 < points.len() { points[i + 1] } else { points[i] };
+        let t = (next - prev).normalize_or_zero();
+        tangents.push(if t.length_squared() > 0.0 { t } else { Vec3::Z });
+    }
 
+    // 2) Build a stable normal along the curve using parallel transport
+    let mut normals = Vec::with_capacity(points.len());
+
+    // Pick an initial reference that isn't parallel to the first tangent
+    let t0 = tangents[0];
+    let ref_axis = if t0.dot(Vec3::Y).abs() < 0.9 { Vec3::Y } else { Vec3::X };
+    let mut n = (ref_axis - t0 * t0.dot(ref_axis)).normalize_or_zero();
+    if n.length_squared() == 0.0 {
+        n = Vec3::X;
+    }
+    normals.push(n);
+
+    for i in 1..points.len() {
+        let t_prev = tangents[i - 1];
+        let t_curr = tangents[i];
+
+        let axis = t_prev.cross(t_curr);
+        let axis_len2 = axis.length_squared();
+
+        if axis_len2 < 1e-10 {
+            // Tangents almost the same -> keep normal
+            normals.push(n);
+            continue;
+        }
+
+        let axis_n = axis / axis_len2.sqrt();
+        let dot = t_prev.dot(t_curr).clamp(-1.0, 1.0);
+        let angle = dot.acos();
+
+        let q = Quat::from_axis_angle(axis_n, angle);
+        n = (q * n).normalize_or_zero();
+        normals.push(n);
+    }
+
+    // 3) Generate ribbon vertices: p +/- binormal * half_width
     let mut positions: Vec<[f32; 3]> = Vec::with_capacity(points.len() * 2);
-    let mut normals: Vec<[f32; 3]> = Vec::with_capacity(points.len() * 2);
+    let mut mesh_normals: Vec<[f32; 3]> = Vec::with_capacity(points.len() * 2);
     let mut indices: Vec<u32> = Vec::with_capacity((points.len() - 1) * 6);
 
     for i in 0..points.len() {
         let p = points[i];
+        let t = tangents[i];
+        let n = normals[i];
 
-        let dir_prev = if i > 0 {
-            (p - points[i - 1]).normalize_or_zero()
-        } else {
-            (points[i + 1] - p).normalize_or_zero()
-        };
-
-        let dir_next = if i + 1 < points.len() {
-            (points[i + 1] - p).normalize_or_zero()
-        } else {
-            (p - points[i - 1]).normalize_or_zero()
-        };
-
-        let dir = (dir_prev + dir_next).normalize_or_zero();
-
-        // Side vector gives the width direction: perpendicular to (dir, up)
-        let mut side = dir.cross(up).normalize_or_zero();
-        if side.length_squared() == 0.0 {
-            side = Vec3::X; // fallback if dir || up
+        // Width direction
+        let mut b = t.cross(n).normalize_or_zero();
+        if b.length_squared() == 0.0 {
+            // Fallback if something degenerate happened
+            b = Vec3::X;
         }
 
-        // Basic miter scaling to reduce corner shrink; clamped to avoid spikes
-        let prev_side = dir_prev.cross(up).normalize_or_zero();
-        let denom = side.dot(prev_side).abs().max(0.2);
-        let miter_scale = (1.0 / denom).min(4.0);
+        let left = p + b * half_width;
+        let right = p - b * half_width;
 
-        let offset = side * (half_width * miter_scale);
+        positions.push([left.x, left.y, left.z]);
+        positions.push([right.x, right.y, right.z]);
 
-        let a = p + offset;
-        let b = p - offset;
-
-        positions.push([a.x, a.y, a.z]);
-        positions.push([b.x, b.y, b.z]);
-
-        // Flat ribbon: normals roughly "up"
-        normals.push([up.x, up.y, up.z]);
-        normals.push([up.x, up.y, up.z]);
+        // Ribbon "faces" toward +n (lighting optional)
+        mesh_normals.push([n.x, n.y, n.z]);
+        mesh_normals.push([n.x, n.y, n.z]);
     }
 
     for i in 0..(points.len() - 1) {
@@ -745,7 +770,7 @@ pub fn polyline_ribbon_mesh_3d(points: &[Vec3], half_width: f32, up: Vec3) -> Me
 
     let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, default());
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, mesh_normals);
     mesh.insert_indices(Indices::U32(indices));
     mesh
 }
