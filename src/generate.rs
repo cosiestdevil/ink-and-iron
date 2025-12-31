@@ -1,5 +1,12 @@
 use bevy::{
-    asset::RenderAssetUsages, color::palettes::css::{BLACK, RED}, ecs::system::SystemState, input_focus::InputFocus, light::{NotShadowCaster, light_consts::lux}, mesh::{Indices, PrimitiveTopology}, prelude::*, state::state::OnEnter
+    asset::RenderAssetUsages,
+    color::palettes::css::{BLACK, RED},
+    ecs::system::SystemState,
+    input_focus::InputFocus,
+    light::{NotShadowCaster, light_consts::lux},
+    mesh::{Indices, PrimitiveTopology},
+    prelude::*,
+    state::state::OnEnter,
 };
 use bevy_easings::Ease;
 use bevy_persistent::Persistent;
@@ -22,6 +29,15 @@ impl Deref for WorldMap {
 
     fn deref(&self) -> &Self::Target {
         if let Some(a) = self.0.as_ref() {
+            a
+        } else {
+            panic!("WorldMap not generated yet");
+        }
+    }
+}
+impl core::ops::DerefMut for WorldMap {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        if let Some(a) = self.0.as_mut() {
             a
         } else {
             panic!("WorldMap not generated yet");
@@ -298,8 +314,22 @@ fn spawn_world(
             ),
         ));
         let scaled_height = height * world_map.height_scale;
+        let height_vertices = &vertices
+            .iter()
+            .map(|v| {
+                (
+                    *v,
+                    world_map.get_height_at_vertex(
+                        (*v/scale) + vec2(
+                            v_cell.site_position().x as f32,
+                            v_cell.site_position().y as f32,
+                        ),
+                    ),
+                )
+            })
+            .collect::<Vec<_>>();
         let mesh = build_extruded_with_caps(
-            &vertices,
+            height_vertices,
             scaled_height,
             v_cell.site_position().to_vec2() * scale,
             map_box,
@@ -307,7 +337,10 @@ fn spawn_world(
         //let mesh = Cuboid::new(1.0, scaled_height, 1.0);
         if height < 0.5 {
             let mesh = build_extruded_with_caps(
-                &vertices,
+                &vertices
+                    .iter()
+                    .map(|v| (*v, (0.5 - height) * scale * 0.25))
+                    .collect::<Vec<_>>(),
                 (0.5 - height) * scale * 0.25,
                 v_cell.site_position().to_vec2() * scale,
                 map_box,
@@ -327,7 +360,7 @@ fn spawn_world(
             ));
         }
         let line = Polyline3d::new(extrude_polygon_xz_to_polyline_vertices(
-            &vertices,
+            height_vertices,
             0.0,
             scaled_height,
         ));
@@ -649,8 +682,8 @@ fn button_system(
 /// Build a single mesh: extruded strip + top & bottom caps.
 /// `path` is in XZ (Vec2(x, z)), extrusion along +Y by `height`.
 pub fn build_extruded_with_caps(
-    path: &[Vec2],
-    height: f32,
+    path: &[(Vec2, f32)],
+    _height: f32,
     _world_center: Vec2,
     _map_box: (Vec2, Vec2),
 ) -> Mesh {
@@ -681,12 +714,12 @@ pub fn build_extruded_with_caps(
 
         // tangent along path (XZ)
         let dir: Vec2 = if i == 0 {
-            (path[1] - path[0]).normalize()
+            (path[1].0 - path[0].0).normalize()
         } else if i == n - 1 {
-            (path[i] - path[i - 1]).normalize()
+            (path[i].0 - path[i - 1].0).normalize()
         } else {
-            let d1 = (path[i] - path[i - 1]).normalize();
-            let d2 = (path[i + 1] - path[i]).normalize();
+            let d1 = (path[i].0 - path[i - 1].0).normalize();
+            let d2 = (path[i + 1].0 - path[i].0).normalize();
             (d1 + d2).normalize()
         };
 
@@ -696,13 +729,13 @@ pub fn build_extruded_with_caps(
         let normal3 = [n2.x, 0.0, n2.y];
 
         // bottom vertex
-        positions.push([p.x, 0.0, p.y]);
+        positions.push([p.0.x, 0.0, p.0.y]);
         normals.push(normal3);
         //let u = i as f32 / (n as f32 - 1.0);
         uvs.push([0.0, 0.0]);
 
         // top vertex
-        positions.push([p.x, height, p.y]);
+        positions.push([p.0.x, p.1, p.0.y]);
         normals.push(normal3);
         uvs.push([0.0, 0.0]);
     }
@@ -711,20 +744,20 @@ pub fn build_extruded_with_caps(
     // 2) TOP CAP VERTICES (y = height, normal +Y)
     // -----------------
     for p in path.iter().take(n) {
-        positions.push([p.x, height, p.y]);
+        positions.push([p.0.x, p.1, p.0.y]);
         normals.push([0.0, 1.0, 0.0]);
         // simple planar UV (you can rescale/center as needed)
         // let world_pos = p + world_center;
         // let mut uv = ((world_pos - min) / size) * 4.0;
         // uv = uv.fract_gl();
-        uvs.push(p.fract_gl().to_array());
+        uvs.push(p.0.fract_gl().to_array());
     }
 
     // -----------------
     // 3) BOTTOM CAP VERTICES (y = 0, normal -Y)
     // -----------------
     for p in path.iter().take(n) {
-        positions.push([p.x, 0.0, p.y]);
+        positions.push([p.0.x, 0.0, p.0.y]);
         normals.push([0.0, -1.0, 0.0]);
         uvs.push([0.0, 0.0]);
     }
@@ -793,7 +826,11 @@ pub fn build_extruded_with_caps(
 
     mesh
 }
-fn extrude_polygon_xz_to_polyline_vertices(polygon_xz: &[Vec2], y0: f32, y1: f32) -> Vec<Vec3> {
+fn extrude_polygon_xz_to_polyline_vertices(
+    polygon_xz: &[(Vec2, f32)],
+    y0: f32,
+    _y1: f32,
+) -> Vec<Vec3> {
     let n = polygon_xz.len();
     if n == 0 {
         return Vec::new();
@@ -801,8 +838,8 @@ fn extrude_polygon_xz_to_polyline_vertices(polygon_xz: &[Vec2], y0: f32, y1: f32
 
     let mut verts = Vec::new();
 
-    let b = |i: usize| Vec3::new(polygon_xz[i].x, y0, polygon_xz[i].y);
-    let t = |i: usize| Vec3::new(polygon_xz[i].x, y1, polygon_xz[i].y);
+    let b = |i: usize| Vec3::new(polygon_xz[i].0.x, y0, polygon_xz[i].0.y);
+    let t = |i: usize| Vec3::new(polygon_xz[i].0.x, polygon_xz[i].1, polygon_xz[i].0.y);
 
     // Start at bottom[0], go up to top[0]
     verts.push(b(0));
