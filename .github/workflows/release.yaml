@@ -317,7 +317,7 @@ jobs:
       - name: Collect windows bin
         uses: actions/upload-artifact@v4
         with:
-          name: ${{needs.version.outputs.tag}}-windows-release
+          name: ${{needs.version.outputs.tag}}-release-windows
           path: |
             ${{env.ARTIFACT_BASENAME}}-windows.zip
   create-release:
@@ -337,7 +337,7 @@ jobs:
           args: --unreleased --tag ${{needs.version.outputs.tag}} --strip header
       - uses: actions/download-artifact@v5
         with:
-          pattern: ${{needs.version.outputs.tag}}-*-release
+          pattern: ${{needs.version.outputs.tag}}-release-*
           merge-multiple: true
       - name: Display structure of downloaded files
         run: ls
