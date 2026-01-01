@@ -326,6 +326,9 @@ jobs:
         build-windows-llm-cuda,
         build-windows-llm-cpu,
         build-windows-bin,
+        build-mac-llm-metal,
+        build-mac-llm-cpu,
+        build-mac-bin
       ]
     steps:
       - name: Checkout
@@ -346,13 +349,20 @@ jobs:
           path: target/linux
           pattern: ${{needs.version.outputs.tag}}-linux-*
           merge-multiple: true
+      - uses: actions/download-artifact@v5
+        with:
+          path: target/mac
+          pattern: ${{needs.version.outputs.tag}}-mac-*
+          merge-multiple: true
       - name: Prepare files
         id: collect
         run: |
           cp -r assets target/windows/assets
           cp -r assets target/linux/assets
+          cp -r assets target/mac/assets
           cp -r credits target/windows/credits
           cp -r credits target/linux/credits
+          cp -r credits target/mac/credits
       - uses: CyberAndrii/steam-totp@v1
         name: Generate TOTP
         id: steam-totp
@@ -368,6 +378,7 @@ jobs:
           rootPath: target
           depot1Path: windows
           depot2Path: linux
+          depot3Path: mac
           releaseBranch: experimental
   build-linux-release:
     runs-on: ubuntu-latest
