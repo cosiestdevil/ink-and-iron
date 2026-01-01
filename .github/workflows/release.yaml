@@ -245,6 +245,75 @@ jobs:
           name: ${{needs.version.outputs.tag}}-windows-steam
           path: |
             target/release/steam_api64.dll
+  build-mac-llm-metal:
+    runs-on: macos-latest
+    needs: version
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+      - name: Cargo build (release)
+        run: cargo build --package llm-provider-mac --release
+      - name: Collect build outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{needs.version.outputs.tag}}-mac-llm-metal
+          path: |
+            target/release/libllm_provider_mac.dylib
+  build-mac-llm-cpu:
+    runs-on: macos-latest
+    needs: version
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+      - name: Cargo build (release)
+        run: cargo build --package llm-provider-cpu --release
+      - name: Collect build outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{needs.version.outputs.tag}}-mac-llm-cpu
+          path: |
+            target/release/libllm_provider.dylib
+  build-mac-bin:
+    runs-on: macos-latest
+    needs: version
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+      - name: set version env
+        shell: bash
+        run: |
+          echo "VERSION_TAG=${{ needs.version.outputs.tag }}" >> $GITHUB_ENV
+      - name: Cargo build (release)
+        run: cargo build --release
+
+      - name: Collect build outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{needs.version.outputs.tag}}-mac-bin
+          path: |
+            target/release/${{env.ARTIFACT_BASENAME}}
+
+      - name: fetch steam dll
+        run: |
+          cp target/release/build/steamworks-sys-*/out/libsteam_api.dylib target/release/libsteam_api.dylib
+      - name: Collect steam dll
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{needs.version.outputs.tag}}-mac-steam
+          path: |
+            target/release/libsteam_api.dylib
 
   build-steam-release:
     runs-on: ubuntu-latest
