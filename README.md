@@ -45,7 +45,7 @@ LAN and Online Multiplayer coming in future updates
 |-|-|-|
 | CPU | Intel 5th Gen or newer / AMD Ryzen | |
 |RAM|8GB|16GB|
-|Video Cards| NVidia RTX20160 / AMD RX 5700[^1] | NVidia RTX 4070 Ti / Radeon RX 7900 XT[^1] |
+|Video Cards| NVidia RTX 2060 / AMD RX 5700[^1] | NVidia RTX 4070 Ti / Radeon RX 7900 XT[^1] |
 |VRAM|5GB| 8GB|
 |OS|Win 11 x64| Win 11 x64|
 |Disk Space|3GB|3GB|
@@ -56,3 +56,14 @@ LAN and Online Multiplayer coming in future updates
 ## Contributing
 
 
+## Features required for release
+
+ - [ ] Computer controlled "Players"
+ - [ ] Save and Resume of matches
+ - [ ] Online matches, fully human, and mixed
+ - [ ] Background table model + room
+ - [ ] Unit models
+ - [ ] Settlement models
+ - [ ] Resource cells
+ - [ ] Build structures on controlled cells to improve resource extraction
+ - [ ] Input overhaul, including controller support
