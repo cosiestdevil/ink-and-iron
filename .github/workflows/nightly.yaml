@@ -16,13 +16,12 @@ jobs:
         outputs:
             run: ${{ steps.decide.outputs.should_skip }}
         steps:
-            # your "has main changed since last run?" logic here
             - id: decide
               uses: fkirc/skip-duplicate-actions@v5
 
     pipeline:
         needs: gate
-        if: needs.gate.outputs.run == 'true'
+        if: needs.gate.outputs.run != 'true'
         permissions:
             contents: write
             id-token: write
