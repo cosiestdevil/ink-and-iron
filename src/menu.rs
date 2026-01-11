@@ -83,7 +83,8 @@ fn new_game_menu(
     mut selected_civs: Local<Option<Vec<Option<AssetId<Civilisation>>>>>,
 ) {
     let ctx = contexts.ctx_mut().unwrap();
-    let temp_params = temp_params.get_or_insert_with(|| crate::generate::WorldType::Default.get_params());
+    let temp_params =
+        temp_params.get_or_insert_with(|| crate::generate::WorldType::Default.get_params());
     let player_count = player_count.get_or_insert_with(|| 1);
     let selected_civs = selected_civs.get_or_insert_with(|| vec![None, None, None, None]);
     let mut settings = menu::NewWorldSettings {
