@@ -7,13 +7,12 @@ use std::{
 };
 
 use geo::{Contains, CoordsIter, Polygon, unary_union};
-use glam::{IVec2, Vec2, Vec3, Vec3Swizzles, vec2};
+use glam::{I64Vec2, Vec2, Vec3, Vec3Swizzles, vec2};
 use noise::{Fbm, NoiseFn, Perlin, RidgedMulti};
 use rand::{
     Rng,
     distr::{Distribution, Uniform},
 };
-use tracing::error;
 use voronoice::*;
 
 use helpers::min_max_componentwise;
@@ -42,7 +41,7 @@ pub struct WorldMap {
     voronoi: Voronoi,
     cell_height: HashMap<CellId, f32>,
     polygons: HashMap<CellId, geo::Polygon>,
-    vertex_heights: HashMap<IVec2, f32>,
+    vertex_heights: HashMap<I64Vec2, f32>,
 }
 impl WorldMap {
     pub fn get_cell_for_position(&self, pos: Vec2) -> Option<CellId> {
@@ -79,17 +78,17 @@ impl WorldMap {
         self.voronoi.iter_cells()
     }
 
-    fn quantize_key(pos: Vec2) -> IVec2 {
-        const CELL: f32 = 1e-5;
+    fn quantize_key(pos: Vec2) -> I64Vec2 {
+        const CELL: f32 = 1e-3;
         let q = pos / CELL;
-        IVec2::new(q.x.round() as i32, q.y.round() as i32)
+        I64Vec2::new(q.x.round() as i64, q.y.round() as i64)
     }
     pub fn get_raw_height(&self, id: &CellId) -> f32 {
         *(self.cell_height.get(id).unwrap())
     }
     pub fn calc_height_at_vertex(&mut self, pos: Vec2) {
         let pos_key = Self::quantize_key(pos);
-        if let Some(height) = self.vertex_heights.get(&pos_key) {
+        if self.vertex_heights.contains_key(&pos_key) {
             return;
         }
         let res = self.height_at_vertex(pos);
