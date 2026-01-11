@@ -329,9 +329,9 @@ jobs:
         build-windows-llm-cuda,
         build-windows-llm-cpu,
         build-windows-bin,
-        build-mac-llm-metal,
-        build-mac-llm-cpu,
-        build-mac-bin
+        #build-mac-llm-metal,
+        #build-mac-llm-cpu,
+        #build-mac-bin
       ]
     steps:
       - name: Checkout
