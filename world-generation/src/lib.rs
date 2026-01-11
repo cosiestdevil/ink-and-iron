@@ -202,9 +202,56 @@ pub struct WorldGenerationParams {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum WorldType {
     Default = 0,
-    Flat = 1,
+    Small = 1,
+    Large = 2,
+    Flat = 3,
 }
-
+impl WorldType {
+    pub fn get_params(&self) -> WorldGenerationParams {
+        match self {
+            WorldType::Default =>WorldGenerationParams {
+                width: 16.0,
+                height: 9.0,
+                plate_count: 10,
+                plate_size: 10,
+                continent_count: 20,
+                continent_size: 150,
+                ocean_count: 25,
+                ocean_size: 100,
+                scale: 12.0,
+                world_type: *self,
+            },
+            WorldType::Small => WorldGenerationParams {
+                width: 16.0,
+                height: 9.0,
+                plate_count: 10,
+                plate_size: 10,
+                continent_count: 10,
+                continent_size: 75,
+                ocean_count: 12,
+                ocean_size: 50,
+                scale: 6.0,
+                world_type: *self,
+            },
+            WorldType::Large => WorldGenerationParams {
+                width: 16.0,
+                height: 9.0,
+                plate_count: 10,
+                plate_size: 10,
+                continent_count: 55,
+                continent_size: 350,
+                ocean_count: 66,
+                ocean_size: 250,
+                scale: 30.0,
+                world_type: *self,
+            },
+            WorldType::Flat => WorldGenerationParams {
+                world_type: *self,
+                ..WorldType::Default.get_params()
+            },
+        }
+    }
+}
 pub fn generate_world<R: Rng + Clone>(
     params: WorldGenerationParams,
     mut rng: &mut R,
@@ -415,7 +462,11 @@ pub fn generate_world<R: Rng + Clone>(
 
     let noise_scale = 50.0;
     let cells_height = match world_type {
-        WorldType::Default => {
+        WorldType::Flat => cells
+            .iter()
+            .map(|c| (c.id, 0.5))
+            .collect::<HashMap<CellId, f32>>(),
+        _ => {
             let mut h = generate_heightmap(&cells, plates, |p| {
                 // Simple FBM + ridged noise
                 let a = fbm.get([p.x as f64 * noise_scale, p.y as f64 * noise_scale]) as f32 * 0.5;
@@ -441,15 +492,11 @@ pub fn generate_world<R: Rng + Clone>(
                 .map(|(i, c)| (c.id, h[i]))
                 .collect::<HashMap<CellId, f32>>()
         }
-        WorldType::Flat => cells
-            .iter()
-            .map(|c| (c.id, 0.5))
-            .collect::<HashMap<CellId, f32>>(),
     };
     let mut world_map = WorldMap {
         scale,
-        height_scale: scale * 0.25,
-        entity_scale: scale * 0.025,
+        height_scale: 7.5,
+        entity_scale: 0.75,
         voronoi: continents_voronoi,
         cell_height: cells_height,
         polygons: cell_polys,
