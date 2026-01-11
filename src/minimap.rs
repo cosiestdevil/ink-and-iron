@@ -60,7 +60,7 @@ pub fn spawn_minimap_camera(mut commands: Commands, minimap: Res<MinimapImage>,w
             ..default()
         },
         Projection::Orthographic(OrthographicProjection {
-            scale: 0.5,
+            scale: world.scale/60.0,
             ..OrthographicProjection::default_2d()
         }),
         //RenderLayers::from_layers(&[1]), // render only what is on layer 1
