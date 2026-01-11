@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 use egui::{Align2, Area, CentralPanel, Frame, Margin};
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 pub enum MainMenuAction {
@@ -51,6 +52,7 @@ pub fn main_menu(ctx: &mut egui::Context, offset_x: f32, width: f32) -> MainMenu
 }
 pub struct Settings {
     pub music_volume: f32,
+    pub window_mode:FullscreenMode,
     pub llm_mode: LLMMode,
 }
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -58,6 +60,12 @@ pub enum LLMMode {
     Cuda,
     Cpu,
     None,
+}
+#[derive(PartialEq, Eq, Clone, Copy,Serialize,Deserialize)]
+pub enum FullscreenMode{
+    Windowed,
+    BorderlessFullscreen,
+    Fullscreen
 }
 pub enum SettingsMenuAction {
     None,
@@ -91,6 +99,17 @@ pub fn settings_menu(
                         if ui.add(slider).changed() {
                             // Apply to the actual audio channel
                         }
+                        ui.add_space(4.0);
+                        egui::ComboBox::from_label("Display Mode")
+                        .selected_text(match settings.window_mode{
+                            FullscreenMode::Windowed => "Windowed",
+                            FullscreenMode::BorderlessFullscreen => "Borderless Fullscreen",
+                            FullscreenMode::Fullscreen => "Fullscreen",
+                        }).show_ui(ui, |ui|{
+                            ui.selectable_value(&mut settings.window_mode, FullscreenMode::Windowed, "Windowed");
+                            ui.selectable_value(&mut settings.window_mode, FullscreenMode::BorderlessFullscreen, "Borderless Fullscreen");
+                            ui.selectable_value(&mut settings.window_mode, FullscreenMode::Fullscreen, "Fullscreen");
+                        });
                         ui.add_space(4.0);
                         egui::ComboBox::from_label("LLM Mode")
                             .selected_text(match settings.llm_mode {
