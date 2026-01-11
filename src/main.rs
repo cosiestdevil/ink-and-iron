@@ -24,6 +24,7 @@ use bevy::{
     pbr::Atmosphere,
     post_process::bloom::Bloom,
     prelude::*,
+    window::PrimaryWindow,
 };
 use bevy_easings::{Ease, EasingsPlugin};
 use bevy_egui::{
@@ -175,7 +176,11 @@ struct LoadedFolders {
 fn load_civs(asset_server: Res<AssetServer>, mut folders: ResMut<LoadedFolders>) {
     folders.civs = Some(asset_server.load_folder("civilisations"));
 }
-fn load_settings(mut commands: Commands, llm_mode_override: Res<LlmModeOverride>) {
+fn load_settings(
+    mut commands: Commands,
+    llm_mode_override: Res<LlmModeOverride>,
+    mut window: Single<&mut Window, With<PrimaryWindow>>,
+) {
     let config_dir = dirs::config_dir().unwrap().join(env!("CARGO_PKG_NAME"));
     commands.insert_resource(
         Persistent::<AudioSettings>::builder()
@@ -186,6 +191,24 @@ fn load_settings(mut commands: Commands, llm_mode_override: Res<LlmModeOverride>
             .build()
             .expect("Failed to init audio settings"),
     );
+    let video_settings = Persistent::<VideoSettings>::builder()
+        .name("video settings")
+        .format(StorageFormat::Toml)
+        .path(config_dir.join("video_settings.toml"))
+        .default(VideoSettings::default())
+        .build()
+        .expect("Failed to init video settings");
+    window.mode = match video_settings.get().window_mode {
+        ::menu::FullscreenMode::Windowed => bevy::window::WindowMode::Windowed,
+        ::menu::FullscreenMode::BorderlessFullscreen => {
+            bevy::window::WindowMode::BorderlessFullscreen(MonitorSelection::Current)
+        }
+        ::menu::FullscreenMode::Fullscreen => bevy::window::WindowMode::Fullscreen(
+            MonitorSelection::Current,
+            VideoModeSelection::Current,
+        ),
+    };
+    commands.insert_resource(video_settings);
     let mut llm_settings = Persistent::<LLMSettings>::builder()
         .name("llm settings")
         .format(StorageFormat::Toml)
@@ -230,6 +253,10 @@ struct AudioSettings {
 struct LLMSettings {
     llm_mode: LLMMode,
 }
+#[derive(Resource, serde::Serialize, serde::Deserialize, Clone)]
+struct VideoSettings {
+    window_mode: ::menu::FullscreenMode,
+}
 impl Default for AudioSettings {
     fn default() -> Self {
         AudioSettings { music_volume: 1.0 }
@@ -242,7 +269,13 @@ impl Default for LLMSettings {
         }
     }
 }
-
+impl Default for VideoSettings {
+    fn default() -> Self {
+        Self {
+            window_mode: ::menu::FullscreenMode::Windowed,
+        }
+    }
+}
 fn setup_rng(mut random: ResMut<Random<ChaCha20Rng>>, seed: Res<Seed>) {
     let rng = match seed.0.as_ref() {
         Some(s) => {

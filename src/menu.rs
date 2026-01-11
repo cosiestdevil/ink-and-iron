@@ -1,9 +1,12 @@
-use bevy::prelude::*;
+use bevy::{
+    prelude::*,
+    window::{PrimaryWindow, WindowMode},
+};
 use bevy_egui::{EguiContexts, EguiPrimaryContextPass};
 use bevy_kira_audio::{AudioChannel, AudioControl};
-use menu::Settings;
+use menu::{FullscreenMode, Settings};
 
-use crate::{AppState, AudioSettings, Civilisation, GameState, LLMSettings, Music};
+use crate::{AppState, AudioSettings, Civilisation, GameState, LLMSettings, Music, VideoSettings};
 pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
@@ -119,13 +122,16 @@ fn settings_menu(
     mut next_menu_state: ResMut<NextState<MenuState>>,
     mut audio_settings: ResMut<bevy_persistent::Persistent<AudioSettings>>,
     mut llm_settings: ResMut<bevy_persistent::Persistent<LLMSettings>>,
+    mut video_settings: ResMut<bevy_persistent::Persistent<VideoSettings>>,
     mut temp_settings: Local<Option<::menu::Settings>>,
     music: Res<AudioChannel<Music>>,
+    mut window: Single<&mut Window, With<PrimaryWindow>>,
 ) {
     let ctx = contexts.ctx_mut().unwrap();
     let temp_settings = temp_settings.get_or_insert_with(|| Settings {
         music_volume: audio_settings.music_volume,
         llm_mode: llm_settings.llm_mode.into(),
+        window_mode: window.mode.into_settings(),
     });
     let action = menu::settings_menu(ctx, MENU_OFFSET_X, MENU_WIDTH, temp_settings);
     music.set_volume(crate::volume_from_slider(temp_settings.music_volume));
@@ -142,12 +148,43 @@ fn settings_menu(
                     settings.llm_mode = temp_settings.llm_mode.into();
                 })
                 .expect("Failed to save LLM settings");
+            video_settings
+                .update(|settings| {
+                    settings.window_mode = temp_settings.window_mode;
+                })
+                .expect("Failed to save video settings");
+            window.mode = match temp_settings.window_mode {
+                FullscreenMode::Windowed => WindowMode::Windowed,
+                FullscreenMode::BorderlessFullscreen => {
+                    WindowMode::BorderlessFullscreen(MonitorSelection::Current)
+                }
+                FullscreenMode::Fullscreen => {
+                    WindowMode::Fullscreen(MonitorSelection::Current, VideoModeSelection::Current)
+                }
+            };
             next_menu_state.set(MenuState::Main);
         }
         menu::SettingsMenuAction::Return => {
             temp_settings.music_volume = audio_settings.music_volume;
             music.set_volume(crate::volume_from_slider(temp_settings.music_volume));
             next_menu_state.set(MenuState::Main);
+        }
+    }
+}
+trait IntoSettings<S: Copy>: Copy {
+    fn into_settings(self) -> S;
+}
+impl IntoSettings<FullscreenMode> for WindowMode {
+    #[inline]
+    fn into_settings(self) -> FullscreenMode {
+        match self {
+            WindowMode::Windowed => FullscreenMode::Windowed,
+            WindowMode::BorderlessFullscreen(monitor_selection) => {
+                FullscreenMode::BorderlessFullscreen
+            }
+            WindowMode::Fullscreen(monitor_selection, video_mode_selection) => {
+                FullscreenMode::Fullscreen
+            }
         }
     }
 }
