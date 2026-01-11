@@ -13,7 +13,17 @@ use crate::{
     llm::SettlementNameCtx,
 };
 use bevy::{
-    asset::{AssetLoader, LoadContext, LoadedFolder, io::Reader, ron}, camera::{Exposure, visibility::NoFrustumCulling}, ecs::system::SystemState, input_focus::InputFocus, light::AtmosphereEnvironmentMapLight, log::LogPlugin, math::bounding::Aabb2d, mesh::{Indices, PrimitiveTopology}, pbr::Atmosphere, post_process::bloom::Bloom, prelude::*
+    asset::{AssetLoader, LoadContext, LoadedFolder, io::Reader, ron},
+    camera::{Exposure, visibility::NoFrustumCulling},
+    ecs::system::SystemState,
+    input_focus::InputFocus,
+    light::AtmosphereEnvironmentMapLight,
+    log::LogPlugin,
+    math::bounding::Aabb2d,
+    mesh::{Indices, PrimitiveTopology},
+    pbr::Atmosphere,
+    post_process::bloom::Bloom,
+    prelude::*,
 };
 use bevy_easings::{Ease, EasingsPlugin};
 use bevy_egui::{
@@ -561,14 +571,20 @@ fn startup(
                 ShapeBuilder::with(&polygon).fill(player.color).build(),
                 Transform::from_translation(pos.xzy().with_z(4.0)),
             ));
-            let ribbons_vertices = controlled_vertices.iter().map(|v|v.extend(world_map.get_height_at_vertex((*v+pos.xz())/world_map.scale)).xzy()).collect::<Vec<_>>();
-            let ribbon_mesh = polyline_ribbon_mesh_3d(&ribbons_vertices,0.1,Vec3::Y);
+            let ribbons_vertices = controlled_vertices
+                .iter()
+                .map(|v| {
+                    v.extend(world_map.get_height_at_vertex((*v + pos.xz()) / world_map.scale))
+                        .xzy()
+                })
+                .collect::<Vec<_>>();
+            let ribbon_mesh = polyline_ribbon_mesh_3d(&ribbons_vertices, 0.1, Vec3::Y);
             commands.spawn((
                 ControlledArea(settlement_entity),
                 Mesh3d(meshes.add(ribbon_mesh)),
                 MeshMaterial3d(player_mat.clone()),
                 NoFrustumCulling,
-                Transform::from_translation(pos.with_y(0.01))
+                Transform::from_translation(pos.with_y(0.01)),
             ));
         }
     }
@@ -593,12 +609,12 @@ fn settlement_grows(
     event: On<SettlementGrows>,
     mut settlements: Query<&mut SettlementCenter>,
     minimap_controlled_areas: Query<(Entity, &minimap::MinimapControlledArea)>,
-    controlled_areas:Query<(Entity,&ControlledArea)>,
+    controlled_areas: Query<(Entity, &ControlledArea)>,
     world_map: Res<WorldMap>,
     mut commands: Commands,
     pathfinding: Res<crate::pathfinding::PathFinding>,
     game_state: Res<GameState>,
-    mut meshes: ResMut<Assets<Mesh>>
+    mut meshes: ResMut<Assets<Mesh>>,
 ) {
     let scale = world_map.scale;
     let crate::pathfinding::PathFinding { graph, nodes } = pathfinding.as_ref();
@@ -661,9 +677,17 @@ fn settlement_grows(
         points: controlled_vertices.clone(),
         closed: true,
     };
-    let ribbons_vertices = controlled_vertices.iter().map(|v|v.extend(world_map.get_height_at_vertex((*v+pos.xz())/world_map.scale)).xzy()).collect::<Vec<_>>();
-    let outline_mesh = polyline_ribbon_mesh_3d(&ribbons_vertices,0.1,Vec3::Y);
-    commands.entity(controlled_area_entity).insert(Mesh3d(meshes.add(outline_mesh)));
+    let ribbons_vertices = controlled_vertices
+        .iter()
+        .map(|v| {
+            v.extend(world_map.get_height_at_vertex((*v + pos.xz()) / world_map.scale))
+                .xzy()
+        })
+        .collect::<Vec<_>>();
+    let outline_mesh = polyline_ribbon_mesh_3d(&ribbons_vertices, 0.1, Vec3::Y);
+    commands
+        .entity(controlled_area_entity)
+        .insert(Mesh3d(meshes.add(outline_mesh)));
     commands
         .entity(minimap_controlled_area_entity)
         .insert(ShapeBuilder::with(&polygon).fill(player.color).build());
@@ -676,7 +700,11 @@ pub fn polyline_ribbon_mesh_3d(points: &[Vec3], half_width: f32, up: Vec3) -> Me
     let mut tangents = Vec::with_capacity(points.len());
     for i in 0..points.len() {
         let prev = if i > 0 { points[i - 1] } else { points[i] };
-        let next = if i + 1 < points.len() { points[i + 1] } else { points[i] };
+        let next = if i + 1 < points.len() {
+            points[i + 1]
+        } else {
+            points[i]
+        };
         let t = (next - prev).normalize_or_zero();
         tangents.push(if t.length_squared() > 0.0 { t } else { Vec3::Z });
     }
@@ -686,7 +714,11 @@ pub fn polyline_ribbon_mesh_3d(points: &[Vec3], half_width: f32, up: Vec3) -> Me
 
     // Pick an initial reference that isn't parallel to the first tangent
     let t0 = tangents[0];
-    let ref_axis = if t0.dot(Vec3::Y).abs() < 0.9 { Vec3::Y } else { Vec3::X };
+    let ref_axis = if t0.dot(Vec3::Y).abs() < 0.9 {
+        Vec3::Y
+    } else {
+        Vec3::X
+    };
     let mut n = (ref_axis - t0 * t0.dot(ref_axis)).normalize_or_zero();
     if n.length_squared() == 0.0 {
         n = Vec3::X;
