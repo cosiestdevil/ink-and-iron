@@ -1,7 +1,14 @@
 name: Build & Release
 
 on:
-  workflow_call: {}
+  workflow_call:
+    secrets:
+      STEAM_SHARED_SECRET:
+        required: true
+      STEAM_USERNAME:
+        required: true
+      STEAM_PASSWORD:
+        required: true
   push:
     branches:
     #  - main # alpha/beta pre-releases from pushes
