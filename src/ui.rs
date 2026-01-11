@@ -74,7 +74,7 @@ fn ui_example_system(
                             ),
                         );
 
-                    ui.add(image);
+                    
                     ScrollArea::vertical().show(ui, |ui| {
                         ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
                             let active_player = game_state.active_player;
@@ -112,6 +112,7 @@ fn ui_example_system(
                             }
                         });
                     });
+                    ui.add(image);
                 });
             let active_player = game_state.active_player;
             let player = game_state.players.get_mut(&active_player).unwrap();
