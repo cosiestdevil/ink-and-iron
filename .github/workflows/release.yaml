@@ -1,9 +1,10 @@
 name: Build & Release
 
 on:
+  workflow_call: {}
   push:
     branches:
-      - main # alpha/beta pre-releases from pushes
+    #  - main # alpha/beta pre-releases from pushes
       - "v*.*.*" # release branches like vX.9.0 -> full releases on pushes
     tags:
       - "v*.*.*-beta" # create a beta pre-release when this tag is pushed
