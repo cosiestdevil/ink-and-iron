@@ -5652,6 +5652,7 @@ name = "menu"
 version = "0.1.0"
 dependencies = [
  "egui",
+ "serde",
  "world-generation",
 ]
 
