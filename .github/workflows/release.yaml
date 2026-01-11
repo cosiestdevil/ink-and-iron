@@ -247,6 +247,7 @@ jobs:
             target/release/steam_api64.dll
   build-mac-llm-metal:
     runs-on: macos-latest
+    if: false
     needs: version
     steps:
       - name: Checkout
@@ -265,6 +266,7 @@ jobs:
             target/release/libllm_provider_mac.dylib
   build-mac-llm-cpu:
     runs-on: macos-latest
+    if: false
     needs: version
     steps:
       - name: Checkout
@@ -283,6 +285,7 @@ jobs:
             target/release/libllm_provider.dylib
   build-mac-bin:
     runs-on: macos-latest
+    if: false
     needs: version
     steps:
       - name: Checkout
