@@ -44,26 +44,8 @@ mod minimap;
 mod pathfinding;
 #[derive(Parser, Debug)]
 struct Args {
-    #[arg(long, default_value_t = 16.0)]
-    width: f64,
-    #[arg(long, default_value_t = 9.0)]
-    height: f64,
-    #[arg(long, default_value_t = 10)]
-    plate_count: usize,
-    #[arg(long, default_value_t = 10)]
-    plate_size: usize,
-    #[arg(long, default_value_t = 55)]
-    continent_count: usize,
-    #[arg(long, default_value_t = 350)]
-    continent_size: usize,
-    #[arg(long, default_value_t = 66)]
-    ocean_count: usize,
-    #[arg(long, default_value_t = 250)]
-    ocean_size: usize,
     #[arg(long)]
     seed: Option<String>,
-    #[arg(long, default_value_t = WorldType::Default)]
-    world_type: WorldType,
     #[arg(long)]
     llm_mode: Option<LLMMode>,
 }
@@ -131,7 +113,7 @@ fn main() -> anyhow::Result<()> {
         //.insert_resource(GameState::new(2))
         .insert_resource::<Random<RandomRng>>(Random(None))
         .insert_resource(Selection::None)
-        .insert_resource::<generate::WorldGenerationParams>((&args).into())
+        //.insert_resource::<generate::WorldGenerationParams>((&args).into())
         .add_systems(
             Startup,
             (

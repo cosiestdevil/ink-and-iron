@@ -47,13 +47,17 @@ impl core::ops::DerefMut for WorldMap {
 #[derive(Clone, Copy, ValueEnum, Debug)]
 pub enum WorldType {
     Default = 0,
-    Flat = 1,
+    Small = 1,
+    Large = 2,
+    Flat = 3,
 }
 impl std::fmt::Display for WorldType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             WorldType::Default => write!(f, "default"),
             WorldType::Flat => write!(f, "flat"),
+            WorldType::Small => write!(f, "small"),
+            WorldType::Large => write!(f, "large"),
         }
     }
 }
@@ -62,27 +66,21 @@ impl From<WorldType> for world_generation::WorldType {
         match value {
             WorldType::Default => world_generation::WorldType::Default,
             WorldType::Flat => world_generation::WorldType::Flat,
+            WorldType::Small => world_generation::WorldType::Small,
+            WorldType::Large => world_generation::WorldType::Large,
         }
     }
 }
-#[derive(Resource)]
-pub struct WorldGenerationParams(pub Option<world_generation::WorldGenerationParams>);
-impl From<&crate::Args> for WorldGenerationParams {
-    fn from(value: &crate::Args) -> Self {
-        WorldGenerationParams(Some(world_generation::WorldGenerationParams {
-            width: value.width,
-            height: value.height,
-            plate_count: value.plate_count,
-            plate_size: value.plate_size,
-            continent_count: value.continent_count,
-            continent_size: value.continent_size,
-            ocean_count: value.ocean_count,
-            ocean_size: value.ocean_size,
-            scale: 30.0,
-            world_type: value.world_type.into(),
-        }))
+impl WorldType {
+    pub fn get_params(&self) -> world_generation::WorldGenerationParams {
+        let a: world_generation::WorldType = (*self).into();
+        a.get_params()
     }
 }
+
+#[derive(Resource)]
+pub struct WorldGenerationParams(pub Option<world_generation::WorldGenerationParams>);
+
 pub struct WorldPlugin;
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {

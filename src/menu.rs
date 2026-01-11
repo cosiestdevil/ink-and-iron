@@ -73,14 +73,14 @@ fn new_game_menu(
     mut contexts: EguiContexts,
     mut next_state: ResMut<NextState<AppState>>,
     mut next_menu_state: ResMut<NextState<MenuState>>,
-    mut params: ResMut<crate::generate::WorldGenerationParams>,
+    //mut params: ResMut<crate::generate::WorldGenerationParams>,
     mut temp_params: Local<Option<world_generation::WorldGenerationParams>>,
     mut player_count: Local<Option<u8>>,
     civs: Res<Assets<Civilisation>>,
     mut selected_civs: Local<Option<Vec<Option<AssetId<Civilisation>>>>>,
 ) {
     let ctx = contexts.ctx_mut().unwrap();
-    let temp_params = temp_params.get_or_insert_with(|| params.0.unwrap());
+    let temp_params = temp_params.get_or_insert_with(|| crate::generate::WorldType::Default.get_params());
     let player_count = player_count.get_or_insert_with(|| 1);
     let selected_civs = selected_civs.get_or_insert_with(|| vec![None, None, None, None]);
     let mut settings = menu::NewWorldSettings {
@@ -93,16 +93,14 @@ fn new_game_menu(
         .map(|(id, civ)| (id, civ.name.clone()))
         .collect::<std::collections::HashMap<_, _>>();
     let action = menu::new_game_menu(ctx, MENU_OFFSET_X, MENU_WIDTH, &mut settings, &civ_map);
-    *temp_params = world_generation::WorldGenerationParams {
-        world_type: settings.world_type,
-        ..*temp_params
-    };
+    *temp_params = settings.world_type.get_params();
     *player_count = settings.player_count as u8;
     *selected_civs = settings.selected_civs.clone();
     match action {
         menu::NewGameMenuAction::None => {}
         menu::NewGameMenuAction::Start => {
-            *params = crate::generate::WorldGenerationParams(Some(*temp_params));
+            commands.insert_resource(crate::generate::WorldGenerationParams(Some(*temp_params)));
+            //*params = crate::generate::WorldGenerationParams(Some(*temp_params));
             commands.insert_resource(GameState::new(
                 settings.player_count,
                 &mut settings.selected_civs,
@@ -111,7 +109,6 @@ fn new_game_menu(
             next_state.set(AppState::Generating);
         }
         menu::NewGameMenuAction::Return => {
-            *temp_params = params.0.unwrap();
             next_menu_state.set(MenuState::Main);
         }
     }

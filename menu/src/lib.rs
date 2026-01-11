@@ -154,6 +154,16 @@ pub fn new_game_menu<CivId: PartialEq + Eq + std::hash::Hash + Copy, Civ: Displa
                         );
                         ui.selectable_value(
                             &mut settings.world_type,
+                            world_generation::WorldType::Small,
+                            "Small",
+                        );
+                        ui.selectable_value(
+                            &mut settings.world_type,
+                            world_generation::WorldType::Large,
+                            "Large",
+                        );
+                        ui.selectable_value(
+                            &mut settings.world_type,
                             world_generation::WorldType::Flat,
                             "Flat",
                         );
