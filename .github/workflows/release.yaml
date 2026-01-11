@@ -363,10 +363,10 @@ jobs:
         run: |
           cp -r assets target/windows/assets
           cp -r assets target/linux/assets
-          cp -r assets target/mac/assets
+          #cp -r assets target/mac/assets
           cp -r credits target/windows/credits
           cp -r credits target/linux/credits
-          cp -r credits target/mac/credits
+          #cp -r credits target/mac/credits
       - uses: CyberAndrii/steam-totp@v1
         name: Generate TOTP
         id: steam-totp
