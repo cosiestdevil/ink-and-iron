@@ -315,50 +315,56 @@ fn spawn_world(
         let height_vertices = &vertices
             .iter()
             .map(|v| {
-                (
+                temp::PolyVert::new(
                     *v,
                     world_map.get_height_at_vertex(
-                        (*v/scale) + vec2(
-                            v_cell.site_position().x as f32,
-                            v_cell.site_position().y as f32,
-                        ),
+                        (*v / scale)
+                            + vec2(
+                                v_cell.site_position().x as f32,
+                                v_cell.site_position().y as f32,
+                            ),
                     ),
                 )
             })
             .collect::<Vec<_>>();
-        let mesh = build_extruded_with_caps(
-            height_vertices,
-            scaled_height,
-            v_cell.site_position().to_vec2() * scale,
-            map_box,
-        );
+        let mesh = temp::build_top_cap_mesh_convex_normalized_uv(height_vertices);
+        // let temp = height_vertices
+        //     .iter()
+        //     .map(|p| (p.p, p.h))
+        //     .collect::<Vec<_>>();
+        // let mesh = build_extruded_with_caps(&temp, scaled_height,
+        //     v_cell.site_position().to_vec2() * scale,map_box);
         //let mesh = Cuboid::new(1.0, scaled_height, 1.0);
-        if height < 0.5 {
-            let mesh = build_extruded_with_caps(
-                &vertices
-                    .iter()
-                    .map(|v| (*v, (0.5 - height) * scale * 0.25))
-                    .collect::<Vec<_>>(),
-                (0.5 - height) * scale * 0.25,
-                v_cell.site_position().to_vec2() * scale,
-                map_box,
-            );
+        // if height < 0.5 {
+        //     let mesh = build_extruded_with_caps(
+        //         &vertices
+        //             .iter()
+        //             .map(|v| (*v, (0.5 - height) * scale * 0.25))
+        //             .collect::<Vec<_>>(),
+        //         (0.5 - height) * scale * 0.25,
+        //         v_cell.site_position().to_vec2() * scale,
+        //         map_box,
+        //     );
 
-            commands.spawn((
-                Mesh3d(meshes.add(mesh)),
-                MeshMaterial3d(ocean_material.clone()),
-                Transform::from_xyz(
-                    // Distribute shapes from -X_EXTENT/2 to +X_EXTENT/2.
-                    v_cell.site_position().x as f32 * scale,
-                    scaled_height,
-                    v_cell.site_position().y as f32 * scale,
-                ),
-                Ground,
-                NotShadowCaster,
-            ));
-        }
+        //     commands.spawn((
+        //         Mesh3d(meshes.add(mesh)),
+        //         MeshMaterial3d(ocean_material.clone()),
+        //         Transform::from_xyz(
+        //             // Distribute shapes from -X_EXTENT/2 to +X_EXTENT/2.
+        //             v_cell.site_position().x as f32 * scale,
+        //             scaled_height,
+        //             v_cell.site_position().y as f32 * scale,
+        //         ),
+        //         Ground,
+        //         NotShadowCaster,
+        //     ));
+        // }
+        let temp = height_vertices
+            .iter()
+            .map(|p| (p.p, p.h))
+            .collect::<Vec<_>>();
         let line = Polyline3d::new(extrude_polygon_xz_to_polyline_vertices(
-            height_vertices,
+            &temp,
             0.0,
             scaled_height,
         ));
@@ -397,6 +403,19 @@ fn spawn_world(
         brightness: 20000.0,
         ..default()
     });
+    let width = map_box.1.x - map_box.0.x;
+    let height = map_box.1.y - map_box.0.y;
+    commands.spawn((
+        Mesh3d(meshes.add(Plane3d::new(Vec3::Y, vec2(width / 2.0, height / 2.0)))),
+        MeshMaterial3d(ocean_material),
+        Transform::from_xyz(
+            map_box.0.x + (width / 2.0),
+            world_map.height_scale * 0.5,
+            map_box.0.y + (height / 2.0),
+        ),
+        Ground,
+        NotShadowCaster,
+    ));
     commands.spawn((
         DirectionalLight {
             shadows_enabled: true,
@@ -877,4 +896,142 @@ fn extrude_polygon_xz_to_polyline_vertices(
     }
 
     verts
+}
+
+mod temp {
+    use bevy::asset::RenderAssetUsages;
+    use bevy::mesh::{Indices, Mesh, PrimitiveTopology};
+    use bevy::prelude::*;
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct PolyVert {
+        /// Footprint (x,z) stored as (x,y)
+        pub p: Vec2,
+        /// Height -> Y
+        pub h: f32,
+    }
+    impl PolyVert {
+        pub fn new(p: Vec2, h: f32) -> Self {
+            Self { p, h }
+        }
+    }
+    /// Top-cap mesh for a *convex* polygon (triangle fan).
+    /// - Positions: (x, y=height, z)
+    /// - UVs: normalized to 0..1 over the polygon's footprint AABB
+    /// - Normals: computed from the (possibly non-planar) cap triangles (smooth per-vertex)
+    ///
+    /// Notes:
+    /// - Convex only (fan triangulation).
+    /// - If you want the cap to appear perfectly flat-shaded upward, set all normals to (0,1,0) instead.
+    pub fn build_top_cap_mesh_convex_normalized_uv(boundary: &[PolyVert]) -> Mesh {
+        assert!(boundary.len() >= 3, "Polygon needs at least 3 vertices");
+
+        // Ensure CCW winding in footprint so triangles face +Y consistently.
+        let mut b: Vec<PolyVert> = boundary.to_vec();
+        if signed_area_2d(&b) > 0.0 {
+            b.reverse();
+        }
+
+        // AABB in footprint space for UV normalization
+        let (min, max) = bounds_2d(&b);
+        let size = (max - min).max(Vec2::splat(1e-6)); // avoid div-by-zero
+
+        let uv_of = |p: Vec2| -> [f32; 2] {
+            let q = (p - min) / size; // 0..1 over bounds
+            [q.x, q.y]
+        };
+
+        let mut positions: Vec<[f32; 3]> = Vec::with_capacity(b.len());
+        let mut normals: Vec<[f32; 3]> = vec![[0.0, 0.0, 0.0]; b.len()];
+        let mut uvs: Vec<[f32; 2]> = Vec::with_capacity(b.len());
+        let mut indices: Vec<u32> = Vec::with_capacity((b.len().saturating_sub(2)) * 3);
+
+        // Vertices
+        for v in &b {
+            positions.push([v.p.x, v.h, v.p.y]);
+            uvs.push(uv_of(v.p));
+        }
+
+        // Indices (triangle fan from vertex 0)
+        for i in 1..(b.len() - 1) {
+            indices.extend_from_slice(&[0, i as u32, (i as u32 + 1)]);
+        }
+
+        // Compute smooth normals from cap triangles
+        compute_smooth_normals_full(&positions, &indices, &mut normals);
+
+        // Assemble mesh
+        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::all());
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+        mesh.insert_indices(Indices::U32(indices));
+        mesh
+    }
+
+    // -------------------------
+    // helpers
+    // -------------------------
+
+    fn signed_area_2d(v: &[PolyVert]) -> f32 {
+        let mut area = 0.0;
+        for i in 0..v.len() {
+            let a = v[i].p;
+            let b = v[(i + 1) % v.len()].p;
+            area += a.x * b.y - b.x * a.y;
+        }
+        0.5 * area
+    }
+
+    fn bounds_2d(v: &[PolyVert]) -> (Vec2, Vec2) {
+        let mut min = Vec2::splat(f32::INFINITY);
+        let mut max = Vec2::splat(f32::NEG_INFINITY);
+        for vert in v {
+            min = min.min(vert.p);
+            max = max.max(vert.p);
+        }
+        (min, max)
+    }
+
+    fn compute_smooth_normals_full(
+        positions: &[[f32; 3]],
+        indices: &[u32],
+        normals: &mut [[f32; 3]],
+    ) {
+        // zero
+        for n in normals.iter_mut() {
+            *n = [0.0, 0.0, 0.0];
+        }
+
+        for tri in indices.chunks_exact(3) {
+            let i0 = tri[0] as usize;
+            let i1 = tri[1] as usize;
+            let i2 = tri[2] as usize;
+
+            let p0 = Vec3::from_array(positions[i0]);
+            let p1 = Vec3::from_array(positions[i1]);
+            let p2 = Vec3::from_array(positions[i2]);
+
+            let n = (p1 - p0).cross(p2 - p0); // area-weighted
+            if n.length_squared() == 0.0 {
+                continue;
+            }
+
+            for &i in &[i0, i1, i2] {
+                normals[i][0] += n.x;
+                normals[i][1] += n.y;
+                normals[i][2] += n.z;
+            }
+        }
+
+        for n in normals.iter_mut() {
+            let v = Vec3::new(n[0], n[1], n[2]);
+            let v = if v.length_squared() > 0.0 {
+                v.normalize()
+            } else {
+                Vec3::Y
+            };
+            *n = [v.x, v.y, v.z];
+        }
+    }
 }
