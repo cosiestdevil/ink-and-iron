@@ -436,7 +436,10 @@ fn startup(
     let map_box = world_map.bounds();
 
     for player in game_state.players.values_mut() {
-        let valid_settlment_cells = world_map.get_valid_settlement_cells();
+        let mut valid_settlment_cells = world_map.get_valid_settlement_cells();
+        if valid_settlment_cells.is_empty() {
+            valid_settlment_cells = world_map.iter_cells().map(|c| CellId(c.site())).collect();
+        }
         let valid_settlment_cells_i = random
             .0
             .as_mut()
