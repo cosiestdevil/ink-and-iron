@@ -490,7 +490,12 @@ jobs:
             ${{env.ARTIFACT_BASENAME}}-windows.zip
   create-release:
     runs-on: ubuntu-latest
-    needs: [version, build-linux-release, build-windows-release, build-mac-release]
+    needs: [
+      version, 
+      build-linux-release, 
+      build-windows-release, 
+      #build-mac-release
+      ]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
