@@ -115,6 +115,8 @@ fn main() -> anyhow::Result<()> {
         .add_message::<TurnStart>()
         .init_asset::<Civilisation>()
         .init_asset_loader::<CivilisationAssetLoader>()
+        .init_asset::<LLMProvider>()
+        .init_asset_loader::<LLMProviderAssetLoader>()
         .init_state::<AppState>()
         .init_resource::<InputFocus>()
         .init_resource::<crate::pathfinding::PathFinding>()
@@ -172,9 +174,11 @@ fn main() -> anyhow::Result<()> {
 #[derive(Resource, Default)]
 struct LoadedFolders {
     civs: Option<Handle<LoadedFolder>>,
+    llm_providers:Option<Handle<LoadedFolder>>
 }
 fn load_civs(asset_server: Res<AssetServer>, mut folders: ResMut<LoadedFolders>) {
     folders.civs = Some(asset_server.load_folder("civilisations"));
+    folders.llm_providers = Some(asset_server.load_folder("llm-providers"))
 }
 fn load_settings(
     mut commands: Commands,
@@ -1059,6 +1063,65 @@ impl AssetLoader for CivilisationAssetLoader {
         &["civ.ron"]
     }
 }
+
+#[derive(TypePath, Debug, Deserialize, Clone, Asset)]
+struct LLMProvider{
+    pub name:String,
+    pub id:String,
+    pub meta:Vec<LibMeta>
+
+}
+#[derive(Default)]
+struct LLMProviderAssetLoader;
+#[non_exhaustive]
+#[derive(Debug, Error)]
+enum LLMProviderAssetLoaderError {
+    /// An [IO](std::io) Error
+    #[error("Could not load asset: {0}")]
+    Io(#[from] std::io::Error),
+    /// A [RON](ron) Error
+    #[error("Could not parse RON: {0}")]
+    RonSpannedError(#[from] ron::error::SpannedError),
+}
+impl AssetLoader for LLMProviderAssetLoader{
+    type Asset = LLMProvider;
+    type Settings = ();
+    type Error = LLMProviderAssetLoaderError;
+    async fn load(
+        &self,
+        reader: &mut dyn Reader,
+        _settings: &(),
+        _load_context: &mut LoadContext<'_>,
+    ) -> Result<Self::Asset, Self::Error> {
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes).await?;
+        let custom_asset = ron::de::from_bytes::<Self::Asset>(&bytes)?;
+        Ok(custom_asset)
+    }
+
+    fn extensions(&self) -> &[&str] {
+        &["llm.ron"]
+    }
+}
+#[derive(Debug, Deserialize, Clone)]
+struct LibMeta{
+    pub os:LibOperatingSystem,
+    pub path:String
+}
+#[derive(Debug, Deserialize, Clone,PartialEq,Eq)]
+pub enum LibOperatingSystem{
+    Windows,
+    Linux,
+    MacOS
+}
+pub const CURRENT_OS: LibOperatingSystem = {
+    if cfg!(target_os = "windows") { LibOperatingSystem::Windows }
+    else if cfg!(target_os = "macos") { LibOperatingSystem::MacOS }
+    else if cfg!(target_os = "linux") { LibOperatingSystem::Linux }
+    else {
+        panic!("Unknown OS")
+    }
+};
 
 #[derive(Debug, Deserialize, Clone)]
 struct UnitType {
