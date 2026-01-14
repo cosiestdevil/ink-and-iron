@@ -6,7 +6,7 @@ use bevy_egui::{EguiContexts, EguiPrimaryContextPass};
 use bevy_kira_audio::{AudioChannel, AudioControl};
 use menu::{FullscreenMode, Settings};
 
-use crate::{AppState, AudioSettings, Civilisation, GameState, LLMSettings, Music, VideoSettings};
+use crate::{AppState, AudioSettings, Civilisation, GameState, LLMProvider, LLMSettings, Music, VideoSettings};
 pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
@@ -127,14 +127,16 @@ fn settings_menu(
     mut temp_settings: Local<Option<::menu::Settings>>,
     music: Res<AudioChannel<Music>>,
     mut window: Single<&mut Window, With<PrimaryWindow>>,
+    llm_providers:Res<Assets<LLMProvider>>,
 ) {
     let ctx = contexts.ctx_mut().unwrap();
     let temp_settings = temp_settings.get_or_insert_with(|| Settings {
         music_volume: audio_settings.music_volume,
-        llm_mode: llm_settings.llm_mode.into(),
+        llm_mode: llm_settings.llm_mode.clone(),
         window_mode: window.mode.into_settings(),
     });
-    let action = menu::settings_menu(ctx, MENU_OFFSET_X, MENU_WIDTH, temp_settings);
+    let llm_providers :Vec<_> = llm_providers.iter().map(|p|menu::LLMProvider{name: p.1.name.clone(), id: p.1.id.clone() }).collect();
+    let action = menu::settings_menu(ctx, MENU_OFFSET_X, MENU_WIDTH, temp_settings,&llm_providers);
     music.set_volume(crate::volume_from_slider(temp_settings.music_volume));
     match action {
         menu::SettingsMenuAction::None => {}
@@ -146,7 +148,7 @@ fn settings_menu(
                 .expect("Failed to save audio settings");
             llm_settings
                 .update(|settings| {
-                    settings.llm_mode = temp_settings.llm_mode.into();
+                    settings.llm_mode = temp_settings.llm_mode.clone();
                 })
                 .expect("Failed to save LLM settings");
             video_settings
