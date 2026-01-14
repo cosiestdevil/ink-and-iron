@@ -18,6 +18,8 @@ jobs:
         steps:
             - id: decide
               uses: fkirc/skip-duplicate-actions@v5
+              with:
+                  do_not_skip: "[]"
 
     pipeline:
         needs: gate
