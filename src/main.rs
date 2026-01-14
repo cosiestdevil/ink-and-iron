@@ -43,7 +43,6 @@ use bevy_tokio_tasks::TokioTasksRuntime;
 use clap::Parser;
 use colorgrad::Gradient;
 use geo::{CoordsIter, unary_union};
-use llm::LLMMode;
 use num::Num;
 use rand::{Rng, SeedableRng, distr::Uniform};
 use rand_chacha::ChaCha20Rng;
@@ -58,7 +57,7 @@ struct Args {
     #[arg(long)]
     seed: Option<String>,
     #[arg(long)]
-    llm_mode: Option<LLMMode>,
+    llm_mode: Option<Option<String>>,
 }
 #[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash, States)]
 pub(crate) enum AppState {
@@ -71,7 +70,7 @@ pub(crate) enum AppState {
 mod logs;
 mod menu;
 #[derive(Resource)]
-struct LlmModeOverride(Option<LLMMode>);
+struct LlmModeOverride(Option<Option<String>>);
 const STEAM_APP_ID: u32 = match u32::from_str_radix(env!("STEAM_APP_ID"), 10) {
     Ok(id) => id,
     Err(_) => panic!(
@@ -220,10 +219,10 @@ fn load_settings(
         .default(LLMSettings::default())
         .build()
         .expect("Failed to init llm settings");
-    if let Some(llm_override) = llm_mode_override.0 {
+    if let Some(llm_override) = &llm_mode_override.0 {
         llm_settings
             .update(|settings| {
-                settings.llm_mode = llm_override;
+                settings.llm_mode = llm_override.clone();
             })
             .expect("Failed to override llm mode from command line");
     }
@@ -254,8 +253,9 @@ struct AudioSettings {
     music_volume: f32,
 }
 #[derive(Resource, serde::Serialize, serde::Deserialize, Clone)]
+#[derive(Default)]
 struct LLMSettings {
-    llm_mode: LLMMode,
+    llm_mode: Option<String>,
 }
 #[derive(Resource, serde::Serialize, serde::Deserialize, Clone)]
 struct VideoSettings {
@@ -264,13 +264,6 @@ struct VideoSettings {
 impl Default for AudioSettings {
     fn default() -> Self {
         AudioSettings { music_volume: 1.0 }
-    }
-}
-impl Default for LLMSettings {
-    fn default() -> Self {
-        LLMSettings {
-            llm_mode: LLMMode::None,
-        }
     }
 }
 impl Default for VideoSettings {
