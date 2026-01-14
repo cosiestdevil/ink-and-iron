@@ -1,0 +1,14 @@
+LLMProvider(
+    name:"CPU",
+    id:"llama_cpu",
+    meta: [
+        LibMeta(
+            os:Windows,
+            path:"llm_provider.dll"
+        ),
+        LibMeta(
+            os:Linux,
+            path:"libllm_provider.so"
+        )
+    ]
+)

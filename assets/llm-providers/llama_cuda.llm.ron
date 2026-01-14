@@ -1,0 +1,14 @@
+LLMProvider(
+    name:"Cuda",
+    id:"llama_cuda",
+    meta: [
+        LibMeta(
+            os:Windows,
+            path:"llm_provider_cuda.dll"
+        ),
+        LibMeta(
+            os:Linux,
+            path:"libllm_provider_cuda.so"
+        )
+    ]
+)
