@@ -12,14 +12,8 @@ use tokio::sync::{
     oneshot::{self, Sender},
 };
 use tracing::info;
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum LLMMode {
-    Cuda,
-    Cpu,
-    None,
-}
 pub async fn unit_spawn_barks(
-    llm_mode: LLMMode,
+    llm_mode: Option<String>,
     ctx: UnitSpawnBarkCtx,
     temp: f32,
 ) -> anyhow::Result<Vec<String>> {
@@ -40,7 +34,7 @@ pub async fn unit_spawn_barks(
 }
 
 pub async fn settlement_names(
-    llm_mode: LLMMode,
+    llm_mode: Option<String>,
     ctx: SettlementNameCtx,
     temp: f32,
 ) -> anyhow::Result<Vec<String>> {
@@ -141,7 +135,7 @@ impl LLMHandle {
     }
 }
 static LLM: OnceCell<RwLock<Option<Arc<LLMHandle>>>> = OnceCell::const_new();
-pub async fn get_llm(llm_mode: LLMMode) -> Arc<LLMHandle> {
+pub async fn get_llm(llm_mode: Option<String>) -> Arc<LLMHandle> {
     let llm_lock = LLM.get_or_init(|| async { RwLock::new(None) }).await;
     {
         let read_guard = llm_lock.read().await;
@@ -160,19 +154,6 @@ pub async fn get_llm(llm_mode: LLMMode) -> Arc<LLMHandle> {
     }
     unreachable!()
 }
-
-#[cfg(target_os = "windows")]
-const PRIMARY_LIBRARY: &str = "llm_provider_cuda.dll";
-#[cfg(target_os = "linux")]
-const PRIMARY_LIBRARY: &str = "libllm_provider_cuda.so";
-#[cfg(target_os = "macos")]
-const PRIMARY_LIBRARY:&str = "libllm_provider_mac.dylib";
-#[cfg(target_os = "windows")]
-const CPU_LIBRARY: &str = "llm_provider.dll";
-#[cfg(target_os = "linux")]
-const CPU_LIBRARY: &str = "libllm_provider.so";
-#[cfg(target_os = "macos")]
-const CPU_LIBRARY:&str = "libllm_provider.dylib";
 
 extern "C" fn no_llm_settlement_names(
     ctx: *const ExternSettlementNameCtx,
@@ -206,11 +187,10 @@ extern "C" fn no_llm_unit_spawn_barks(
     let user = Box::into_raw(user);
     done(bytestrs.as_ptr(), bytestrs.len(), user, StatusCode::OK);
 }
-fn load_llm(llm_mode: LLMMode) -> anyhow::Result<(LLMOps, Option<Library>)> {
+fn load_llm(llm_mode: Option<String>) -> anyhow::Result<(LLMOps, Option<Library>)> {
     match llm_mode {
-        LLMMode::Cuda => load_llm_internal(false),
-        LLMMode::Cpu => load_llm_internal(true),
-        LLMMode::None => {
+        Some(path) => load_llm_internal(path),
+        None => {
             let ops = LLMOps {
                 settlement_names: no_llm_settlement_names,
                 unit_spawn_barks: no_llm_unit_spawn_barks,
@@ -219,20 +199,9 @@ fn load_llm(llm_mode: LLMMode) -> anyhow::Result<(LLMOps, Option<Library>)> {
         }
     }
 }
-fn load_llm_internal(force_cpu: bool) -> anyhow::Result<(LLMOps, Option<Library>)> {
+fn load_llm_internal(path: String) -> anyhow::Result<(LLMOps, Option<Library>)> {
     unsafe {
-        let lib = if force_cpu {
-            libloading::Library::new(CPU_LIBRARY)?
-        } else {
-            let mut lib = libloading::Library::new(PRIMARY_LIBRARY);
-            if let Err(_err) = lib {
-                info!("Cuda load failed, falling back to CPU LLM");
-                lib = libloading::Library::new(CPU_LIBRARY);
-            } else {
-                info!("Cuda LLM loaded");
-            }
-            lib?
-        };
+        let lib = libloading::Library::new(path)?;
         info!("Found Library");
         let func: libloading::Symbol<llm_api::CreateFn> = lib.get(b"create_llm_provider")?;
         info!("Found Create Function");
@@ -263,7 +232,7 @@ mod tests {
             .await = None;
         let expected = vec!["Alpha".to_string(), "Beta".to_string()];
         let names = settlement_names(
-            LLMMode::None,
+            None,
             SettlementNameCtx {
                 civilisation_name: "TestCiv".to_string(),
                 description: "Test description".to_string(),
@@ -275,26 +244,5 @@ mod tests {
         .unwrap();
         assert_eq!(names, expected);
     }
-    #[tokio::test]
-    async fn test_cpu_llm_settlement_names() {
-        *LLM.get_or_init(|| async { RwLock::new(None) })
-            .await
-            .write()
-            .await = None;
-        let expected = vec!["Alpha".to_string(), "Beta".to_string()];
-        let names = settlement_names(
-            LLMMode::Cpu,
-            SettlementNameCtx {
-                civilisation_name: "TestCiv".to_string(),
-                description: "Test description".to_string(),
-                seed_names: vec!["Gamma".to_string(), "Delta".to_string()],
-            },
-            0.5,
-        )
-        .await
-        .unwrap();
-        println!("Names: {:?}", names);
-        assert!(!names.is_empty());
-        assert_ne!(names, expected);
-    }
+    
 }
