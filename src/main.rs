@@ -9,7 +9,7 @@ use std::{
 };
 
 use crate::{
-    generate::{CellId, WorldMap, WorldType},
+    generate::{CellId, WorldMap},
     llm::SettlementNameCtx,
 };
 use bevy::{
@@ -723,7 +723,7 @@ fn settlement_grows(
         .insert(ShapeBuilder::with(&polygon).fill(player.color).build());
 }
 
-pub fn polyline_ribbon_mesh_3d(points: &[Vec3], half_width: f32, up: Vec3) -> Mesh {
+pub fn polyline_ribbon_mesh_3d(points: &[Vec3], half_width: f32, _up: Vec3) -> Mesh {
     assert!(points.len() >= 2);
 
     // 1) Compute per-point tangents (smoothed using neighbors)
