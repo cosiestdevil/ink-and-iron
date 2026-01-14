@@ -52,31 +52,32 @@ pub fn main_menu(ctx: &mut egui::Context, offset_x: f32, width: f32) -> MainMenu
 }
 pub struct Settings {
     pub music_volume: f32,
-    pub window_mode:FullscreenMode,
-    pub llm_mode: LLMMode,
+    pub window_mode: FullscreenMode,
+    pub llm_mode: Option<String>,
 }
-#[derive(PartialEq, Eq, Clone, Copy)]
-pub enum LLMMode {
-    Cuda,
-    Cpu,
-    None,
-}
-#[derive(PartialEq, Eq, Clone, Copy,Serialize,Deserialize)]
-pub enum FullscreenMode{
+#[derive(PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+pub enum FullscreenMode {
     Windowed,
     BorderlessFullscreen,
-    Fullscreen
+    Fullscreen,
 }
 pub enum SettingsMenuAction {
     None,
     Save,
     Return,
 }
+
+pub struct LLMProvider {
+    pub name: String,
+    pub id: String,
+}
+
 pub fn settings_menu(
     ctx: &mut egui::Context,
     offset_x: f32,
     width: f32,
     settings: &mut Settings,
+    llm_provider: &[LLMProvider],
 ) -> SettingsMenuAction {
     let mut action = SettingsMenuAction::None;
     egui::CentralPanel::default().show(ctx, |_ui| {});
@@ -101,26 +102,46 @@ pub fn settings_menu(
                         }
                         ui.add_space(4.0);
                         egui::ComboBox::from_label("Display Mode")
-                        .selected_text(match settings.window_mode{
-                            FullscreenMode::Windowed => "Windowed",
-                            FullscreenMode::BorderlessFullscreen => "Borderless Fullscreen",
-                            FullscreenMode::Fullscreen => "Fullscreen",
-                        }).show_ui(ui, |ui|{
-                            ui.selectable_value(&mut settings.window_mode, FullscreenMode::Windowed, "Windowed");
-                            ui.selectable_value(&mut settings.window_mode, FullscreenMode::BorderlessFullscreen, "Borderless Fullscreen");
-                            ui.selectable_value(&mut settings.window_mode, FullscreenMode::Fullscreen, "Fullscreen");
-                        });
-                        ui.add_space(4.0);
-                        egui::ComboBox::from_label("LLM Mode")
-                            .selected_text(match settings.llm_mode {
-                                LLMMode::Cuda => "CUDA",
-                                LLMMode::Cpu => "CPU",
-                                LLMMode::None => "None",
+                            .selected_text(match settings.window_mode {
+                                FullscreenMode::Windowed => "Windowed",
+                                FullscreenMode::BorderlessFullscreen => "Borderless Fullscreen",
+                                FullscreenMode::Fullscreen => "Fullscreen",
                             })
                             .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut settings.llm_mode, LLMMode::Cuda, "CUDA");
-                                ui.selectable_value(&mut settings.llm_mode, LLMMode::Cpu, "CPU");
-                                ui.selectable_value(&mut settings.llm_mode, LLMMode::None, "None");
+                                ui.selectable_value(
+                                    &mut settings.window_mode,
+                                    FullscreenMode::Windowed,
+                                    "Windowed",
+                                );
+                                ui.selectable_value(
+                                    &mut settings.window_mode,
+                                    FullscreenMode::BorderlessFullscreen,
+                                    "Borderless Fullscreen",
+                                );
+                                ui.selectable_value(
+                                    &mut settings.window_mode,
+                                    FullscreenMode::Fullscreen,
+                                    "Fullscreen",
+                                );
+                            });
+                        ui.add_space(4.0);
+                        egui::ComboBox::from_label("LLM Mode")
+                            .selected_text(match &settings.llm_mode {
+                                Some(mode) => llm_provider
+                                    .iter().find(|p| p.id == *mode)
+                                    .map(|p| p.name.clone())
+                                    .unwrap_or("None".to_owned()),
+                                None => "None".to_owned(),
+                            })
+                            .show_ui(ui, |ui| {
+                                for provider in llm_provider {
+                                    ui.selectable_value(
+                                        &mut settings.llm_mode,
+                                        Some(provider.id.clone()),
+                                        provider.name.clone(),
+                                    );
+                                }
+                                ui.selectable_value(&mut settings.llm_mode, None, "None");
                             });
                         ui.add_space(4.0);
                         if ui.button("Save").clicked() {
