@@ -202,7 +202,7 @@ fn generate_unit_spawn_barks(
                     llm_path,
                     UnitSpawnBarkCtx {
                         civilisation_name: civ_name.clone(),
-                        civ_description:civ_description.clone(),
+                        civ_description: civ_description.clone(),
                         unit_type: unit_type.clone(),
                         seed_barks,
                         description: unit_description,
