@@ -8,7 +8,12 @@ use bevy::{
     prelude::*,
     state::state::OnEnter,
 };
-use bevy_easings::Ease;
+use bevy_egui::{
+    EguiContexts,
+    egui::{
+        self, Align2, Margin, RichText,
+    },
+};
 use bevy_persistent::Persistent;
 use bevy_prototype_lyon::prelude::{ShapeBuilder, ShapeBuilderBase};
 use bevy_rts_camera::Ground;
@@ -90,6 +95,10 @@ impl Plugin for WorldPlugin {
         app.init_resource::<WorldMap>();
         app.add_computed_state::<GenerationPhase>();
         app.add_sub_state::<GenerationState>();
+        app.add_systems(
+            Update,
+            (generation_ui).run_if(in_state(AppState::Generating)),
+        );
         app.add_systems(OnEnter(GenerationState::World), gen_world);
         app.add_systems(
             OnEnter(GenerationState::Settlements),
@@ -102,7 +111,7 @@ impl Plugin for WorldPlugin {
         app.add_systems(OnEnter(GenerationState::Spawn), spawn_world);
         app.add_systems(
             OnEnter(GenerationState::Finshed),
-            (remove_marked::<GenerationScreen>, generated_screen),
+            generated_screen,
         );
         app.add_systems(
             OnExit(GenerationState::Finshed),
@@ -113,6 +122,43 @@ impl Plugin for WorldPlugin {
             button_system.run_if(in_state(GenerationState::Finshed)),
         );
     }
+}
+fn generation_ui(
+    mut contexts: EguiContexts,
+    state: Res<State<GenerationState>>,
+) -> bevy::prelude::Result {
+    let ctx = contexts.ctx_mut()?;
+
+    egui::Area::new("loading_screen".into())
+        // Anchor to window center
+        .anchor(Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+        .show(ctx, |ui| {
+            egui::Frame::default()
+                //.corner_radius(5.0.into())
+                .inner_margin(Margin::same(12))
+                .show(ui, |ui| {
+                    ui.vertical_centered(|ui| {
+                        if *state.get() != GenerationState::Finshed {
+                            ui.label(RichText::new("Preparing World").size(36.0).strong());
+                            ui.add_space(10.0);
+                            ui.label(
+                                RichText::new(match state.get() {
+                                    GenerationState::World => "Generating world",
+                                    GenerationState::Settlements => {
+                                        "Generating names for settlements"
+                                    }
+                                    GenerationState::UnitSpawn => "Generating messages for units",
+                                    GenerationState::Spawn => "Placing tiles and settlements",
+                                    GenerationState::Finshed => "",
+                                })
+                                .size(16.0)
+                                .weak(),
+                            );
+                        }
+                    });
+                });
+        });
+    Ok(())
 }
 fn generate_unit_spawn_barks(
     mut rng: ResMut<Random<crate::RandomRng>>,
@@ -547,10 +593,7 @@ enum GenerationState {
     Spawn,
     Finshed,
 }
-#[derive(Component)]
-struct GenerationScreen;
 fn gen_world(
-    mut commands: Commands,
     args: Res<WorldGenerationParams>,
     rng: ResMut<crate::Random<crate::RandomRng>>,
     runtime: ResMut<TokioTasksRuntime>,
@@ -558,56 +601,6 @@ fn gen_world(
     info!("Generating world...");
     let a = *args.0.as_ref().unwrap();
     let rng = rng.0.as_ref().unwrap().clone();
-    commands.spawn((
-        GenerationScreen,
-        Node {
-            width: percent(100),
-            height: percent(100),
-            align_items: AlignItems::Center,
-            justify_content: JustifyContent::Center,
-            flex_direction: FlexDirection::Column,
-            position_type: PositionType::Absolute,
-            top: Val::Percent(-100.0),
-            ..default()
-        }
-        .ease_to_fn(
-            |prev| Node {
-                top: Val::Percent(0.0),
-                ..prev.clone()
-            },
-            bevy_easings::EaseFunction::BounceInOut,
-            bevy_easings::EasingType::Once {
-                duration: std::time::Duration::from_secs(2),
-            },
-        )
-        .with_original_value(),
-        children![
-            (
-                Node { ..default() },
-                children![(
-                    Text::new("Generating World..."),
-                    TextFont {
-                        font_size: 99.0,
-                        ..default()
-                    },
-                    TextColor(Color::srgb(0.9, 0.9, 0.9)),
-                    TextShadow::default(),
-                )],
-            ),
-            (
-                Node { ..default() },
-                children![(
-                    Text::new("Please Stand By"),
-                    TextFont {
-                        font_size: 33.0,
-                        ..default()
-                    },
-                    TextColor(Color::srgb(0.9, 0.9, 0.9)),
-                    TextShadow::default(),
-                )]
-            )
-        ],
-    ));
     runtime.spawn_background_task(move |mut ctx| async move {
         let mut rng = rng;
         let generated_world = world_generation::generate_world(a, &mut rng).unwrap();
