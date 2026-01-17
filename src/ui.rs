@@ -64,7 +64,7 @@ fn ui_example_system(
         .resizable(true)
         .show(ctx, |ui| {
             egui::TopBottomPanel::bottom("my_side_panel_bottom")
-                .exact_height((ui.available_height() / 5.0) + 144.0)
+                .exact_height(370.0)
                 .show_inside(ui, |ui| {
                     let image =
                         egui::Image::new(egui::load::SizedTexture::new(tex_id, minimap_size)).uv(
