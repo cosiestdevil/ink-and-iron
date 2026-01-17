@@ -98,7 +98,6 @@ fn main() -> anyhow::Result<()> {
                     custom_layer: logs::custom_layer,
                     ..default()
                 }),
-            //PanCamPlugin,
             MeshPickingPlugin,
             ShapePlugin,
             AudioPlugin,
