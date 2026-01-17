@@ -20,7 +20,10 @@ use rand::Rng;
 use std::{collections::HashMap, ops::Deref};
 pub use world_generation::CellId;
 
-use crate::{AppState, CURRENT_OS, Cell, CellHighlight, GameState, LLMProvider, LLMSettings, Random, Selection, Unit, llm};
+use crate::{
+    AppState, CURRENT_OS, Cell, CellHighlight, GameState, LLMProvider, LLMSettings, Random,
+    Selection, Unit, llm,
+};
 #[derive(Resource, Default)]
 pub struct WorldMap(pub Option<world_generation::WorldMap>);
 
@@ -116,29 +119,44 @@ fn generate_unit_spawn_barks(
     runtime: ResMut<TokioTasksRuntime>,
     mut game_state: ResMut<GameState>,
     llm_cpu: Res<Persistent<LLMSettings>>,
-    llm_providers:Res<Assets<LLMProvider>>
+    llm_providers: Res<Assets<LLMProvider>>,
 ) {
     let temp = rng.0.as_mut().unwrap().random_range(0.3..0.5);
-    let llm_path = llm_cpu.llm_mode.as_ref().and_then(|l|llm_providers.iter().find(|p|p.1.id == *l).map(|p|p.1.meta.iter().find(|m|m.os == CURRENT_OS).map(|m|m.path.clone()))).flatten();
+    let llm_path = llm_cpu
+        .llm_mode
+        .as_ref()
+        .and_then(|l| {
+            llm_providers.iter().find(|p| p.1.id == *l).map(|p| {
+                p.1.meta
+                    .iter()
+                    .find(|m| m.os == CURRENT_OS)
+                    .map(|m| m.path.clone())
+            })
+        })
+        .flatten();
     for player in game_state.players.values_mut() {
         let player_id = player.id;
         for unit in player.civ.units.iter() {
             player.unit_spawn_barks.insert(unit.name.clone(), vec![]);
         }
-        for unit in player.civ.units.iter() {
-            info!("Generating barks for unit type: {}", unit.name);
-            let civ_name = player.civ.name.clone();
-            let unit_type = unit.name.clone();
-            let civ_description = player.civ.description.clone();
-            let seed_barks = unit.seed_barks.clone();
-            let unit_description = unit.description.clone();
-            let llm_path = llm_path.clone();
-            runtime.spawn_background_task(move |mut ctx| async move {
+        let units = player.civ.units.clone();
+
+        let civ_description = player.civ.description.clone();
+        let civ_name = player.civ.name.clone();
+        let llm_path = llm_path.clone();
+        runtime.spawn_background_task(move |mut ctx| async move {
+            for unit in units.iter() {
+                info!("Generating barks for unit type: {}", unit.name);
+
+                let unit_type = unit.name.clone();
+                let seed_barks = unit.seed_barks.clone();
+                let unit_description = unit.description.clone();
+                let llm_path = llm_path.clone();
                 if let Ok(barks) = llm::unit_spawn_barks(
                     llm_path,
                     UnitSpawnBarkCtx {
-                        civilisation_name: civ_name,
-                        civ_description,
+                        civilisation_name: civ_name.clone(),
+                        civ_description:civ_description.clone(),
                         unit_type: unit_type.clone(),
                         seed_barks,
                         description: unit_description,
@@ -169,8 +187,8 @@ fn generate_unit_spawn_barks(
                     })
                     .await;
                 }
-            });
-        }
+            }
+        });
     }
 }
 
@@ -179,10 +197,21 @@ fn generate_settlement_name(
     runtime: ResMut<TokioTasksRuntime>,
     game_state: Res<GameState>,
     llm_cpu: Res<Persistent<LLMSettings>>,
-    llm_providers:Res<Assets<LLMProvider>>
+    llm_providers: Res<Assets<LLMProvider>>,
 ) {
     let temp = rng.0.as_mut().unwrap().random_range(0.3..0.5);
-    let llm_path = llm_cpu.llm_mode.as_ref().and_then(|l|llm_providers.iter().find(|p|p.1.id == *l).map(|p|p.1.meta.iter().find(|m|m.os == CURRENT_OS).map(|m|m.path.clone()))).flatten();
+    let llm_path = llm_cpu
+        .llm_mode
+        .as_ref()
+        .and_then(|l| {
+            llm_providers.iter().find(|p| p.1.id == *l).map(|p| {
+                p.1.meta
+                    .iter()
+                    .find(|m| m.os == CURRENT_OS)
+                    .map(|m| m.path.clone())
+            })
+        })
+        .flatten();
     for player in game_state.players.values() {
         let civ_name = player.settlement_context.civilisation_name.clone();
         let civ_description = player.settlement_context.description.clone();
