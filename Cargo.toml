@@ -9,7 +9,7 @@ members = [
     "llm-api",
     "llm-provider",
     "llm-provider-cpu",
-    "llm-provider-cuda", "llm-provider-mac",
+    "llm-provider-cuda", "llm-provider-mac", "llm-provider-fusor",
     "menu",
     "pathfinding",
     "world-generation",
