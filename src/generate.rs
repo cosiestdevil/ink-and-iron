@@ -8,7 +8,8 @@ use bevy::{
     state::state::OnEnter,
 };
 use bevy_egui::{
-    EguiContexts, EguiPrimaryContextPass, egui::{self, Align2, Margin, RichText}
+    EguiContexts, EguiPrimaryContextPass,
+    egui::{self, Align2, Margin, RichText},
 };
 use bevy_persistent::Persistent;
 use bevy_prototype_lyon::prelude::{ShapeBuilder, ShapeBuilderBase};

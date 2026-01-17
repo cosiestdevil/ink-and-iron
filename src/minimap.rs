@@ -48,7 +48,11 @@ pub fn setup(
 
     commands.insert_resource(MinimapImage(handle));
 }
-pub fn spawn_minimap_camera(mut commands: Commands, minimap: Res<MinimapImage>,world_map: Res<generate::WorldMap>) {
+pub fn spawn_minimap_camera(
+    mut commands: Commands,
+    minimap: Res<MinimapImage>,
+    world_map: Res<generate::WorldMap>,
+) {
     let world = world_map.0.as_ref().unwrap();
     let bounds = world.bounds();
     info!("World bounds: {:?}", bounds);
@@ -60,11 +64,11 @@ pub fn spawn_minimap_camera(mut commands: Commands, minimap: Res<MinimapImage>,w
             ..default()
         },
         Projection::Orthographic(OrthographicProjection {
-            scale: world.scale/60.0,
+            scale: world.scale / 60.0,
             ..OrthographicProjection::default_2d()
         }),
         //RenderLayers::from_layers(&[1]), // render only what is on layer 1
-        Transform::from_xyz(bounds.1.x*0.5,bounds.1.y*0.5,0.0),
+        Transform::from_xyz(bounds.1.x * 0.5, bounds.1.y * 0.5, 0.0),
     ));
 
     // (Optional but recommended) isolate what this camera renders with RenderLayers.

@@ -89,11 +89,11 @@ pub fn a_star(
                 continue;
             }
             let current_node = nodes.get(&current.cell_id);
-            if current_node.is_none(){
+            if current_node.is_none() {
                 continue;
             }
             let next_node = nodes.get(&n_cell_id);
-            if next_node.is_none(){
+            if next_node.is_none() {
                 continue;
             }
             let edges = graph

@@ -208,7 +208,7 @@ pub enum WorldType {
 impl WorldType {
     pub fn get_params(&self) -> WorldGenerationParams {
         match self {
-            WorldType::Default =>WorldGenerationParams {
+            WorldType::Default => WorldGenerationParams {
                 width: 16.0,
                 height: 9.0,
                 plate_count: 10,

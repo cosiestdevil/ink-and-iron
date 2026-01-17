@@ -172,7 +172,7 @@ fn main() -> anyhow::Result<()> {
 #[derive(Resource, Default)]
 struct LoadedFolders {
     civs: Option<Handle<LoadedFolder>>,
-    llm_providers:Option<Handle<LoadedFolder>>
+    llm_providers: Option<Handle<LoadedFolder>>,
 }
 fn load_civs(asset_server: Res<AssetServer>, mut folders: ResMut<LoadedFolders>) {
     folders.civs = Some(asset_server.load_folder("civilisations"));
@@ -251,8 +251,7 @@ struct Seed(Option<String>);
 struct AudioSettings {
     music_volume: f32,
 }
-#[derive(Resource, serde::Serialize, serde::Deserialize, Clone)]
-#[derive(Default)]
+#[derive(Resource, serde::Serialize, serde::Deserialize, Clone, Default)]
 struct LLMSettings {
     llm_mode: Option<String>,
 }
@@ -1057,11 +1056,10 @@ impl AssetLoader for CivilisationAssetLoader {
 }
 
 #[derive(TypePath, Debug, Deserialize, Clone, Asset)]
-struct LLMProvider{
-    pub name:String,
-    pub id:String,
-    pub meta:Vec<LibMeta>
-
+struct LLMProvider {
+    pub name: String,
+    pub id: String,
+    pub meta: Vec<LibMeta>,
 }
 #[derive(Default)]
 struct LLMProviderAssetLoader;
@@ -1075,7 +1073,7 @@ enum LLMProviderAssetLoaderError {
     #[error("Could not parse RON: {0}")]
     RonSpannedError(#[from] ron::error::SpannedError),
 }
-impl AssetLoader for LLMProviderAssetLoader{
+impl AssetLoader for LLMProviderAssetLoader {
     type Asset = LLMProvider;
     type Settings = ();
     type Error = LLMProviderAssetLoaderError;
@@ -1096,21 +1094,24 @@ impl AssetLoader for LLMProviderAssetLoader{
     }
 }
 #[derive(Debug, Deserialize, Clone)]
-struct LibMeta{
-    pub os:LibOperatingSystem,
-    pub path:String
+struct LibMeta {
+    pub os: LibOperatingSystem,
+    pub path: String,
 }
-#[derive(Debug, Deserialize, Clone,PartialEq,Eq)]
-pub enum LibOperatingSystem{
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq)]
+pub enum LibOperatingSystem {
     Windows,
     Linux,
-    MacOS
+    MacOS,
 }
 pub const CURRENT_OS: LibOperatingSystem = {
-    if cfg!(target_os = "windows") { LibOperatingSystem::Windows }
-    else if cfg!(target_os = "macos") { LibOperatingSystem::MacOS }
-    else if cfg!(target_os = "linux") { LibOperatingSystem::Linux }
-    else {
+    if cfg!(target_os = "windows") {
+        LibOperatingSystem::Windows
+    } else if cfg!(target_os = "macos") {
+        LibOperatingSystem::MacOS
+    } else if cfg!(target_os = "linux") {
+        LibOperatingSystem::Linux
+    } else {
         panic!("Unknown OS")
     }
 };

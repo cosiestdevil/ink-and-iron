@@ -1,9 +1,8 @@
-
-use kalosm_llama::prelude::ChatModelExt;
 use kalosm_llama::FileSource;
-use kalosm_llama::prelude::GenerationParameters;
 use kalosm_llama::Llama;
 use kalosm_llama::LlamaSource;
+use kalosm_llama::prelude::ChatModelExt;
+use kalosm_llama::prelude::GenerationParameters;
 use kalosm_sample::Parse;
 use kalosm_sample::Schema;
 use llm_api::{

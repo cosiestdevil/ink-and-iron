@@ -244,5 +244,4 @@ mod tests {
         .unwrap();
         assert_eq!(names, expected);
     }
-    
 }

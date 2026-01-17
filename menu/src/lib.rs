@@ -128,7 +128,8 @@ pub fn settings_menu(
                         egui::ComboBox::from_label("LLM Mode")
                             .selected_text(match &settings.llm_mode {
                                 Some(mode) => llm_provider
-                                    .iter().find(|p| p.id == *mode)
+                                    .iter()
+                                    .find(|p| p.id == *mode)
                                     .map(|p| p.name.clone())
                                     .unwrap_or("None".to_owned()),
                                 None => "None".to_owned(),
