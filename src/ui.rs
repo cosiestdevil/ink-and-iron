@@ -72,11 +72,10 @@ fn ui_example_system(
                                 egui::pos2(0.0, 1.0), // <-- note Y is 1 here
                                 egui::pos2(1.0, 0.0), // <-- and 0 here
                             ),
-                        );
-
-                    
-                    ScrollArea::vertical().show(ui, |ui| {
+                        );                    
+                    ScrollArea::neither().show(ui, |ui| {
                         ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
+                            ui.add(image);
                             let active_player = game_state.active_player;
                             let player = game_state.players.get_mut(&active_player).unwrap();
                             let mut remove_indices = vec![];
@@ -110,9 +109,11 @@ fn ui_example_system(
                             for &i in remove_indices.iter().rev() {
                                 player.notifications.remove(i);
                             }
+                            
                         });
                     });
-                    ui.add(image);
+                    
+                    
                 });
             let active_player = game_state.active_player;
             let player = game_state.players.get_mut(&active_player).unwrap();
