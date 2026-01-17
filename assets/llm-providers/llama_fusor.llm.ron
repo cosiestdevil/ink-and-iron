@@ -1,0 +1,14 @@
+LLMProvider(
+    name:"Fusor",
+    id:"llama_fusor",
+    meta: [
+        LibMeta(
+            os:Windows,
+            path:"llm_provider_fusor.dll"
+        ),
+        LibMeta(
+            os:Linux,
+            path:"libllm_provider_fusor.so"
+        )
+    ]
+)
