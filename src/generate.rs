@@ -1,18 +1,14 @@
 use bevy::{
     asset::RenderAssetUsages,
-    color::palettes::css::{BLACK, RED},
+    color::palettes::css::BLACK,
     ecs::system::SystemState,
-    input_focus::InputFocus,
     light::{NotShadowCaster, light_consts::lux},
     mesh::{Indices, PrimitiveTopology},
     prelude::*,
     state::state::OnEnter,
 };
 use bevy_egui::{
-    EguiContexts,
-    egui::{
-        self, Align2, Margin, RichText,
-    },
+    EguiContexts, EguiPrimaryContextPass, egui::{self, Align2, Margin, RichText}
 };
 use bevy_persistent::Persistent;
 use bevy_prototype_lyon::prelude::{ShapeBuilder, ShapeBuilderBase};
@@ -96,7 +92,7 @@ impl Plugin for WorldPlugin {
         app.add_computed_state::<GenerationPhase>();
         app.add_sub_state::<GenerationState>();
         app.add_systems(
-            Update,
+            EguiPrimaryContextPass,
             (generation_ui).run_if(in_state(AppState::Generating)),
         );
         app.add_systems(OnEnter(GenerationState::World), gen_world);
@@ -109,26 +105,15 @@ impl Plugin for WorldPlugin {
             generate_unit_spawn_barks,
         );
         app.add_systems(OnEnter(GenerationState::Spawn), spawn_world);
-        app.add_systems(
-            OnEnter(GenerationState::Finshed),
-            generated_screen,
-        );
-        app.add_systems(
-            OnExit(GenerationState::Finshed),
-            remove_marked::<GeneratedScreen>,
-        );
-        app.add_systems(
-            Update,
-            button_system.run_if(in_state(GenerationState::Finshed)),
-        );
     }
 }
 fn generation_ui(
     mut contexts: EguiContexts,
     state: Res<State<GenerationState>>,
+    mut next_state: ResMut<NextState<AppState>>,
 ) -> bevy::prelude::Result {
     let ctx = contexts.ctx_mut()?;
-
+    egui::CentralPanel::default().show(ctx, |_ui| {});
     egui::Area::new("loading_screen".into())
         // Anchor to window center
         .anchor(Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
@@ -139,7 +124,7 @@ fn generation_ui(
                 .show(ui, |ui| {
                     ui.vertical_centered(|ui| {
                         if *state.get() != GenerationState::Finshed {
-                            ui.label(RichText::new("Preparing World").size(36.0).strong());
+                            ui.label(RichText::new("Preparing World").size(36.0));
                             ui.add_space(10.0);
                             ui.label(
                                 RichText::new(match state.get() {
@@ -151,9 +136,14 @@ fn generation_ui(
                                     GenerationState::Spawn => "Placing tiles and settlements",
                                     GenerationState::Finshed => "",
                                 })
-                                .size(16.0)
-                                .weak(),
+                                .size(16.0),
                             );
+                        } else {
+                            ui.label(RichText::new("World Ready").size(36.0));
+                            ui.add_space(10.0);
+                            if ui.button("Start Game").clicked() {
+                                next_state.set(AppState::InGame);
+                            }
                         }
                     });
                 });
