@@ -837,9 +837,7 @@ pub fn polyline_ribbon_mesh_3d(points: &[Vec3], half_width: f32, up: Vec3) -> Me
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, mesh_normals);
     mesh.insert_indices(Indices::U32(indices));
     mesh
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+}#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PlayerId(usize);
 #[derive(Message)]
 struct TurnStart {
