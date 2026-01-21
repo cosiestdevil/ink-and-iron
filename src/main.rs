@@ -718,13 +718,19 @@ fn settlement_grows(
         points: controlled_vertices.clone(),
         closed: true,
     };
-    let ribbons_vertices = controlled_vertices
+    let mut ribbons_vertices = controlled_vertices
         .iter()
         .map(|v| {
-            v.extend(world_map.get_height_at_vertex((*v + pos.xz()) / world_map.scale))
-                .xzy()
+            v.extend(
+                world_map
+                    .get_height_at_vertex((*v + pos.xz()) / world_map.scale)
+                    .max(0.5)
+                    * world_map.height_scale,
+            )
+            .xzy()
         })
         .collect::<Vec<_>>();
+    ribbons_vertices.push(*ribbons_vertices.first().unwrap());
     let outline_mesh = polyline_ribbon_mesh_3d(&ribbons_vertices, 0.1, Vec3::Y);
     commands
         .entity(controlled_area_entity)
@@ -734,7 +740,7 @@ fn settlement_grows(
         .insert(ShapeBuilder::with(&polygon).fill(player.color).build());
 }
 
-pub fn polyline_ribbon_mesh_3d(points: &[Vec3], half_width: f32, _up: Vec3) -> Mesh {
+pub fn polyline_ribbon_mesh_3d(points: &[Vec3], half_width: f32, up: Vec3) -> Mesh {
     assert!(points.len() >= 2);
 
     // 1) Compute per-point tangents (smoothed using neighbors)
@@ -755,7 +761,7 @@ pub fn polyline_ribbon_mesh_3d(points: &[Vec3], half_width: f32, _up: Vec3) -> M
 
     // Pick an initial reference that isn't parallel to the first tangent
     let t0 = tangents[0];
-    let ref_axis = if t0.dot(Vec3::Y).abs() < 0.9 {
+    let ref_axis = if t0.dot(up).abs() < 0.9 {
         Vec3::Y
     } else {
         Vec3::X
