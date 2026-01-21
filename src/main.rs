@@ -69,6 +69,7 @@ pub(crate) enum AppState {
 }
 mod logs;
 mod menu;
+pub mod render_layers;
 #[derive(Resource)]
 struct LlmModeOverride(Option<Option<String>>);
 const STEAM_APP_ID: u32 = match u32::from_str_radix(env!("STEAM_APP_ID"), 10) {

@@ -1,5 +1,5 @@
 use bevy::{
-    camera::RenderTarget,
+    camera::{RenderTarget, visibility::RenderLayers},
     prelude::*,
     render::render_resource::{
         Extent3d, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages,
@@ -67,7 +67,7 @@ pub fn spawn_minimap_camera(
             scale: world.scale / 60.0,
             ..OrthographicProjection::default_2d()
         }),
-        //RenderLayers::from_layers(&[1]), // render only what is on layer 1
+        RenderLayers::from_layers(&[crate::render_layers::MINIMAP]), // render only what is on layer 1
         Transform::from_xyz(bounds.1.x * 0.5, bounds.1.y * 0.5, 0.0),
     ));
 
