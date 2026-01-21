@@ -14,7 +14,10 @@ use crate::{
 };
 use bevy::{
     asset::{AssetLoader, LoadContext, LoadedFolder, io::Reader, ron},
-    camera::{Exposure, visibility::NoFrustumCulling},
+    camera::{
+        Exposure,
+        visibility::{NoFrustumCulling, RenderLayers},
+    },
     ecs::system::SystemState,
     input_focus::InputFocus,
     light::AtmosphereEnvironmentMapLight,
@@ -568,11 +571,11 @@ fn startup(
 
                         ..default()
                     },
-                    // PanCam {
-                    //     enabled: player.order == 0,
-                    //     //max_scale: 1.0,
-                    //     ..default()
-                    // },
+                    RenderLayers::from_layers(&[render_layers::WORLD]), // PanCam {
+                                                                        //     enabled: player.order == 0,
+                                                                        //     //max_scale: 1.0,
+                                                                        //     ..default()
+                                                                        // },
                 ))
                 .id();
             player.camera_entity = Some(camera_entity);
@@ -591,6 +594,7 @@ fn startup(
                 MeshMaterial3d(player_mat.clone()),
                 Transform::from_translation(pos),
                 settlment,
+                RenderLayers::from_layers(&[render_layers::WORLD]),
             ));
             settlement.observe(settlement_grows);
             settlement.observe(click_settlement);
@@ -599,20 +603,28 @@ fn startup(
                 minimap::MinimapControlledArea(settlement_entity),
                 ShapeBuilder::with(&polygon).fill(player.color).build(),
                 Transform::from_translation(pos.xzy().with_z(4.0)),
+                RenderLayers::from_layers(&[render_layers::MINIMAP]),
             ));
-            let ribbons_vertices = controlled_vertices
+            let mut ribbons_vertices = controlled_vertices
                 .iter()
                 .map(|v| {
-                    v.extend(world_map.get_height_at_vertex((*v + pos.xz()) / world_map.scale))
-                        .xzy()
+                    v.extend(
+                        world_map
+                            .get_height_at_vertex((*v + pos.xz()) / world_map.scale)
+                            .max(0.5)
+                            * world_map.height_scale,
+                    )
+                    .xzy()
                 })
                 .collect::<Vec<_>>();
+            ribbons_vertices.push(*ribbons_vertices.first().unwrap());
             let ribbon_mesh = polyline_ribbon_mesh_3d(&ribbons_vertices, 0.1, Vec3::Y);
             commands.spawn((
                 ControlledArea(settlement_entity),
                 Mesh3d(meshes.add(ribbon_mesh)),
                 MeshMaterial3d(player_mat.clone()),
                 NoFrustumCulling,
+                RenderLayers::from_layers(&[render_layers::WORLD]),
                 Transform::from_translation(pos.with_y(0.01)),
             ));
         }

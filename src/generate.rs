@@ -1,9 +1,8 @@
 use bevy::{
-    asset::RenderAssetUsages,
+    camera::visibility::RenderLayers,
     color::palettes::css::BLACK,
     ecs::system::SystemState,
     light::{NotShadowCaster, light_consts::lux},
-    mesh::{Indices, PrimitiveTopology},
     prelude::*,
     state::state::OnEnter,
 };
@@ -19,12 +18,12 @@ use clap::ValueEnum;
 use colorgrad::Gradient;
 use llm_api::{settlement_names::SettlementNameCtx, unit_spawn_barks::UnitSpawnBarkCtx};
 use rand::Rng;
-use std::{collections::HashMap, ops::Deref};
+use std::ops::Deref;
 pub use world_generation::CellId;
 
 use crate::{
     AppState, CURRENT_OS, Cell, CellHighlight, GameState, LLMProvider, LLMSettings, Random,
-    Selection, Unit, llm,
+    Selection, Unit, llm, render_layers,
 };
 #[derive(Resource, Default)]
 pub struct WorldMap(pub Option<world_generation::WorldMap>);
@@ -379,6 +378,7 @@ fn spawn_world(
                 v_cell.site_position().y as f32 * scale,
                 0.0,
             ),
+            RenderLayers::from_layers(&[render_layers::MINIMAP]),
         ));
         let scaled_height = height * world_map.height_scale;
         let height_vertices = &vertices
@@ -453,9 +453,11 @@ fn spawn_world(
                 outline: outline_mesh.clone(),
             },
             Ground,
+            RenderLayers::from_layers(&[render_layers::WORLD]),
             children![(
                 Mesh3d(outline_mesh),
                 MeshMaterial3d(outline_material.clone()),
+                RenderLayers::from_layers(&[render_layers::WORLD]),
                 Transform::IDENTITY
             )],
         ));
@@ -484,6 +486,7 @@ fn spawn_world(
         ),
         Ground,
         NotShadowCaster,
+        RenderLayers::from_layers(&[render_layers::WORLD])
     ));
     commands.spawn((
         DirectionalLight {
@@ -491,6 +494,7 @@ fn spawn_world(
             illuminance: lux::RAW_SUNLIGHT,
             ..default()
         },
+        RenderLayers::from_layers(&[render_layers::WORLD]),
         //cascade_shadow_config,
         Transform::from_xyz(0.0, 200.0, -200.0).looking_at(vec3(0.0, 0.0, 0.0), Vec3::Y),
     ));
