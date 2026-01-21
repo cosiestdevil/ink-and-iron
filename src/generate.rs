@@ -839,11 +839,18 @@ mod temp {
     /// - Positions: (x, y=height, z)
     /// - UVs: normalized to 0..1 over the polygon's footprint AABB
     /// - Normals: computed from the (possibly non-planar) cap triangles (smooth per-vertex)
+    /// - Colors: per-vertex from `height_to_color(height)`
     ///
     /// Notes:
     /// - Convex only (fan triangulation).
-    /// - If you want the cap to appear perfectly flat-shaded upward, set all normals to (0,1,0) instead.
-    pub fn build_top_cap_mesh_convex_normalized_uv(boundary: &[PolyVert]) -> Mesh {
+    pub fn build_top_cap_mesh_convex_normalized_uv_with_colors<F>(
+        boundary: &[PolyVert],
+        height_scale:f32,
+        height_to_color: F,
+    ) -> Mesh
+    where
+        F: Fn(f32) -> [f32; 4], // RGBA in 0..1
+    {
         assert!(boundary.len() >= 3, "Polygon needs at least 3 vertices");
 
         // Ensure CCW winding in footprint so triangles face +Y consistently.
@@ -864,12 +871,14 @@ mod temp {
         let mut positions: Vec<[f32; 3]> = Vec::with_capacity(b.len());
         let mut normals: Vec<[f32; 3]> = vec![[0.0, 0.0, 0.0]; b.len()];
         let mut uvs: Vec<[f32; 2]> = Vec::with_capacity(b.len());
+        let mut colors: Vec<[f32; 4]> = Vec::with_capacity(b.len());
         let mut indices: Vec<u32> = Vec::with_capacity((b.len().saturating_sub(2)) * 3);
 
         // Vertices
         for v in &b {
-            positions.push([v.p.x, v.h, v.p.y]);
+            positions.push([v.p.x, v.h*height_scale, v.p.y]);
             uvs.push(uv_of(v.p));
+            colors.push(height_to_color(v.h));
         }
 
         // Indices (triangle fan from vertex 0)
@@ -885,6 +894,7 @@ mod temp {
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
         mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
         mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+        mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
         mesh.insert_indices(Indices::U32(indices));
         mesh
     }
