@@ -114,7 +114,7 @@ impl WorldMap {
                     height_map.push((cell_pos, cell_height));
                 }
             }
-            let res = Self::voronoi_vertex_mean(&height_map).unwrap_or(0.0) * self.height_scale;
+            let res = Self::voronoi_vertex_mean(&height_map).unwrap_or(0.0);
             return res;
         }
         0.0
