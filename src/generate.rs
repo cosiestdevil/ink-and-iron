@@ -303,7 +303,6 @@ fn spawn_world(
     let g = colorgrad::GradientBuilder::new()
         .css("#001a33 0%, #003a6b 18%, #0f7a8a 32%, #bfe9e9 42%, #f2e6c8 48%, #e8d7a1 52%, #a7c88a 62%, #5b7f3a 72%, #8c8f93 85%, #cdd2d8 93%, #ffffff 100%   ")
         .build::<colorgrad::LinearGradient>().unwrap();
-    let mut height_material_cache = HashMap::<u8, Handle<StandardMaterial>>::new();
     let outline_material = materials.add(StandardMaterial {
         base_color: Color::BLACK,
         unlit: true,
@@ -349,22 +348,29 @@ fn spawn_world(
         let color = g.at(height);
         assert!(color.to_css_hex() != "#000000");
         let color = bevy::color::Color::srgba(color.r, color.g, color.b, 1.0); //.lighter(0.2);
-        let height_key = (height * 100.0).round() as u8;
+        //let height_key = (height * 100.0).round() as u8;
         assert!((0.0..=1.0).contains(&height));
-        let material = if let Some(mat) = height_material_cache.get(&height_key) {
-            mat.clone()
-        } else {
-            //let color = Color::linear_rgba(height, height, height, 1.0);
-            let mat = materials.add(StandardMaterial {
+        // let material = if let Some(mat) = height_material_cache.get(&height_key) {
+        //     mat.clone()
+        // } else {
+        //     //let color = Color::linear_rgba(height, height, height, 1.0);
+        //     let mat = materials.add(StandardMaterial {
+        //         base_color_texture: Some(parchment_handle.clone()),
+        //         base_color: color,
+        //         perceptual_roughness: 0.9,
+        //         unlit: false,
+        //         ..default()
+        //     });
+        //     height_material_cache.insert(height_key, mat.clone());
+        //     mat.clone()
+        // };
+        let material = materials.add(StandardMaterial {
                 base_color_texture: Some(parchment_handle.clone()),
-                base_color: color,
+                base_color: Color::WHITE,
                 perceptual_roughness: 0.9,
                 unlit: false,
                 ..default()
             });
-            height_material_cache.insert(height_key, mat.clone());
-            mat.clone()
-        };
         let cell_shape = ShapeBuilder::with(&polygon)
             .fill(color.with_saturation(color.saturation() / 2.0))
             .stroke((BLACK, 0.1))
@@ -396,7 +402,7 @@ fn spawn_world(
                 )
             })
             .collect::<Vec<_>>();
-        let mesh = temp::build_top_cap_mesh_convex_normalized_uv(height_vertices);
+        let mesh = temp::build_top_cap_mesh_convex_normalized_uv_with_colors(height_vertices,world_map.height_scale,|a|g.at(a).to_linear_rgba());
         // let temp = height_vertices
         //     .iter()
         //     .map(|p| (p.p, p.h))
@@ -430,7 +436,7 @@ fn spawn_world(
         // }
         let temp = height_vertices
             .iter()
-            .map(|p| (p.p, p.h))
+            .map(|p| (p.p, p.h*world_map.height_scale))
             .collect::<Vec<_>>();
         let line = Polyline3d::new(extrude_polygon_xz_to_polyline_vertices(
             &temp,
@@ -615,153 +621,6 @@ fn gen_world(
         .await;
     });
     //next_state.set(AppState::InGame);
-}
-/// Build a single mesh: extruded strip + top & bottom caps.
-/// `path` is in XZ (Vec2(x, z)), extrusion along +Y by `height`.
-pub fn build_extruded_with_caps(
-    path: &[(Vec2, f32)],
-    _height: f32,
-    _world_center: Vec2,
-    _map_box: (Vec2, Vec2),
-) -> Mesh {
-    assert!(path.len() >= 3, "Need at least 3 points for caps");
-    //let (min, max) = map_box;
-    //let size = max - min;
-    let n = path.len();
-
-    // vertex layout:
-    // 0 .. 2*n-1      : side vertices (bottom/top columns)
-    // 2*n .. 3*n-1    : top cap vertices
-    // 3*n .. 4*n-1    : bottom cap vertices
-    let side_vert_count = 2 * n;
-    let top_cap_vert_base = side_vert_count;
-    let bot_cap_vert_base = side_vert_count + n;
-
-    let total_verts = 4 * n;
-
-    let mut positions: Vec<[f32; 3]> = Vec::with_capacity(total_verts);
-    let mut normals: Vec<[f32; 3]> = Vec::with_capacity(total_verts);
-    let mut uvs: Vec<[f32; 2]> = Vec::with_capacity(total_verts);
-
-    // -----------------
-    // 1) SIDE VERTICES
-    // -----------------
-    for i in 0..n {
-        let p = path[i];
-
-        // tangent along path (XZ)
-        let dir: Vec2 = if i == 0 {
-            (path[1].0 - path[0].0).normalize()
-        } else if i == n - 1 {
-            (path[i].0 - path[i - 1].0).normalize()
-        } else {
-            let d1 = (path[i].0 - path[i - 1].0).normalize();
-            let d2 = (path[i + 1].0 - path[i].0).normalize();
-            (d1 + d2).normalize()
-        };
-
-        // outward normal in XZ (left of the path):
-        // n2 = (-dz, dx)
-        let n2 = Vec2::new(-dir.y, dir.x).normalize();
-        let normal3 = [n2.x, 0.0, n2.y];
-
-        // bottom vertex
-        positions.push([p.0.x, 0.0, p.0.y]);
-        normals.push(normal3);
-        //let u = i as f32 / (n as f32 - 1.0);
-        uvs.push([0.0, 0.0]);
-
-        // top vertex
-        positions.push([p.0.x, p.1, p.0.y]);
-        normals.push(normal3);
-        uvs.push([0.0, 0.0]);
-    }
-
-    // -----------------
-    // 2) TOP CAP VERTICES (y = height, normal +Y)
-    // -----------------
-    for p in path.iter().take(n) {
-        positions.push([p.0.x, p.1, p.0.y]);
-        normals.push([0.0, 1.0, 0.0]);
-        // simple planar UV (you can rescale/center as needed)
-        // let world_pos = p + world_center;
-        // let mut uv = ((world_pos - min) / size) * 4.0;
-        // uv = uv.fract_gl();
-        uvs.push(p.0.fract_gl().to_array());
-    }
-
-    // -----------------
-    // 3) BOTTOM CAP VERTICES (y = 0, normal -Y)
-    // -----------------
-    for p in path.iter().take(n) {
-        positions.push([p.0.x, 0.0, p.0.y]);
-        normals.push([0.0, -1.0, 0.0]);
-        uvs.push([0.0, 0.0]);
-    }
-
-    // -----------------
-    // INDICES (TRIANGLE LIST)
-    // -----------------
-    let mut indices: Vec<u32> = Vec::new();
-
-    // 3.1) Side quads -> 2 triangles each
-    //
-    // side vertex layout:
-    //   bottom_i = 2*i
-    //   top_i    = 2*i + 1
-    //
-    // For each segment i..i+1:
-    //   tri 1: bottom_i, bottom_{i+1}, top_i
-    //   tri 2: bottom_{i+1}, top_{i+1}, top_i
-    //
-    // This winds CCW when normals point to the chosen outward side.
-    for i in 0..(n - 1) {
-        let bi = (2 * i) as u32;
-        let ti = bi + 1;
-        let bi2 = (2 * (i + 1)) as u32;
-        let ti2 = bi2 + 1;
-
-        // first triangle
-        indices.push(bi);
-        indices.push(bi2);
-        indices.push(ti);
-
-        // second triangle
-        indices.push(bi2);
-        indices.push(ti2);
-        indices.push(ti);
-    }
-
-    // 3.2) Top cap: fan from vertex 0 of the top ring
-    //
-    // top cap base index offset:
-    let top0 = top_cap_vert_base as u32;
-    for i in 1..(n - 1) {
-        // triangles: (top0, top0 + i, top0 + i + 1)
-        indices.push(top0);
-        indices.push(top0 + i as u32);
-        indices.push(top0 + (i + 1) as u32);
-    }
-
-    // 3.3) Bottom cap: same fan but flipped winding
-    let bot0 = bot_cap_vert_base as u32;
-    for i in 1..(n - 1) {
-        // flip to get normal (0, -1, 0)
-        indices.push(bot0);
-        indices.push(bot0 + (i + 1) as u32);
-        indices.push(bot0 + i as u32);
-    }
-
-    // -----------------
-    // BUILD MESH
-    // -----------------
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::all());
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-    mesh.insert_indices(Indices::U32(indices));
-
-    mesh
 }
 fn extrude_polygon_xz_to_polyline_vertices(
     polygon_xz: &[(Vec2, f32)],
