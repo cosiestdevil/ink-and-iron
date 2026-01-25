@@ -974,25 +974,25 @@ struct Params {
 impl Default for Params {
     fn default() -> Self {
         Self {
-            a_cont: 50.0,
+            a_cont: 25.0,
             a_ocean: -50.0,
-            a_mtn: 50.0,
+            a_mtn: 75.0,
             w_mtn: 1.0,
             p_mtn: 50.0,
-            a_trench: -4.0,
+            a_trench: -12.0,
             sigma_tr: 2.0,
             a_arc: 2.2,
             delta_arc: 1.1,
             sigma_arc: 4.5,
-            a_mor: 5.4,
+            a_mor: 2.7,
             w_mor: 1.0,
             p_mor: 1.2,
-            a_tr: 0.2,
+            a_tr: 3.0,
             w_tr: 1.0,
-            a_plains: 1.4,
+            a_plains: 20.0,
             l_plains: 1.3,
             d_shelf: 10.0,
-            l_shelf: 1000.2,
+            l_shelf: 100.0,
             d_slope: 20.4,
             l_slope: 20.0,
             d_abyss: 0.8,
@@ -1101,7 +1101,7 @@ fn assemble_height(
         };
         let (fbm, ridged) = noise(wx);
 
-        let land_mask = if c.is_ocean { 0.4 } else { 1.0 };
+        let land_mask = if c.is_ocean { 0.4 } else { 2.0 };
         let mtn_mask = (1.0 - fields.d_conv[i] / p.w_mtn).clamp(0.0, 1.0);
         h[i] += p.w_fbm * fbm * land_mask;
         h[i] += p.w_ridge * ridged * (0.2 + 0.8 * mtn_mask);
