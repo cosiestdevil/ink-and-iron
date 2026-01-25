@@ -1,14 +1,11 @@
 #![forbid(unsafe_code)]
 use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet},
-    hash::Hash,
-    ops::Deref,
+    cell, cmp::Ordering, collections::{HashMap, HashSet}, hash::Hash, ops::Deref
 };
 
 use geo::{Contains, CoordsIter, Polygon, unary_union};
 use glam::{I64Vec2, Vec2, Vec3, Vec3Swizzles, vec2};
-use noise::{Fbm, NoiseFn, Perlin, RidgedMulti};
+use noise::{Fbm, HybridMulti, NoiseFn, Perlin, RidgedMulti, Worley};
 use rand::{
     Rng,
     distr::{Distribution, Uniform},
@@ -42,6 +39,7 @@ pub struct WorldMap {
     cell_height: HashMap<CellId, f32>,
     polygons: HashMap<CellId, geo::Polygon>,
     vertex_heights: HashMap<I64Vec2, f32>,
+    resources: HashMap<CellId, HashMap<String, f32>>,
 }
 impl WorldMap {
     pub fn get_cell_for_position(&self, pos: Vec2) -> Option<CellId> {
@@ -159,6 +157,9 @@ impl WorldMap {
         let cell = self.voronoi.cell(id.0);
         cell.iter_vertices().map(|p| p.to_vec2()).collect()
     }
+    pub fn get_resources_for_cell(&self, id: CellId) -> Option<&HashMap<String, f32>> {
+        self.resources.get(&id)
+    }
 }
 
 impl Deref for CellId {
@@ -267,7 +268,7 @@ pub fn generate_world<R: Rng + Clone>(
         scale,
         world_type,
     } = params;
-    let fbm = Fbm::<Perlin>::new(rng.next_u32());
+    let fbm = HybridMulti::<Worley>::new(rng.next_u32());
     let ridged_multi = RidgedMulti::<Perlin>::new(rng.next_u32());
     let my_voronoi = generate(&mut rng, width, height, plate_count * plate_size)?;
 
@@ -492,6 +493,35 @@ pub fn generate_world<R: Rng + Clone>(
                 .collect::<HashMap<CellId, f32>>()
         }
     };
+    let fertility_noise_scale = 25.0;
+    let fertitlity_fbm = Fbm::<Perlin>::new(rng.next_u32());
+    let mineral_multi = HybridMulti::<Worley>::new(rng.next_u32());
+    let resources = build_resource_maps(
+        &mut cells,
+        &cells_height,
+        |p| {
+            let fertility = fertitlity_fbm.get([p.x as f64 * fertility_noise_scale, p.y as f64 * fertility_noise_scale]) as f32;
+            let mineral_richness =
+                mineral_multi.get([p.x as f64 * noise_scale, p.y as f64 * noise_scale]) as f32 * 1.0;
+            (fertility, mineral_richness)
+        },
+        &[ResourceType {
+            name: "Grain".into(),
+            fertility_weight: 1.0,
+            mineral_weight: 0.1,
+            height_range: Some((0.5, 0.6)),
+        },ResourceType {
+            name: "Forest".into(),
+            fertility_weight: 0.75,
+            mineral_weight: 0.2,
+            height_range: Some((0.5, 0.7)),
+        },ResourceType {
+            name: "Metal".into(),
+            fertility_weight: 0.0,
+            mineral_weight: 2.0,
+            height_range: Some((0.2, 1.0)),
+        }],
+    )?;
     let mut world_map = WorldMap {
         scale,
         height_scale: 7.5,
@@ -500,12 +530,14 @@ pub fn generate_world<R: Rng + Clone>(
         cell_height: cells_height,
         polygons: cell_polys,
         vertex_heights: HashMap::new(),
+        resources,
     };
     for cell in cells.iter() {
         for vertex in world_map.get_vertices_for_cell(cell.id) {
             world_map.calc_height_at_vertex(vertex);
         }
     }
+
     Ok(world_map)
 }
 pub fn normalize_split01_in_place(v: &mut [f32]) -> Option<(f32, f32)> {
@@ -1253,4 +1285,37 @@ fn build_voronoi(sites: Vec<Point>, width: f64, height: f64) -> anyhow::Result<V
         .build()
         .expect("Failed to build Voronoi diagram");
     Ok(my_voronoi)
+}
+
+fn build_resource_maps(
+    cells: &mut [Cell],
+    cell_heights: &HashMap<CellId, f32>,
+    mut noise: impl FnMut(glam::Vec2) -> (f32, f32),
+    resources: &[ResourceType],
+) -> anyhow::Result<HashMap<CellId, HashMap<String, f32>>> {
+    let mut res = HashMap::new();
+    for cell in cells.iter_mut() {
+        let (fertility, mineral_richness) = noise(cell.pos);
+        let fertility = (fertility + 1.0) * 0.5; 
+        let mineral_richness = (mineral_richness + 1.0) * 0.5;
+        let height = cell_heights.get(&cell.id).cloned().unwrap_or(0.0);
+        for resource in resources {
+            if let Some((hmin, hmax)) = resource.height_range
+                && (height < hmin as f32 || height > hmax as f32) {
+                    continue;
+                }
+            let mut cell_resources = res.get(&cell.id).cloned().unwrap_or_else(HashMap::new);
+            let value =
+                resource.fertility_weight * fertility + resource.mineral_weight * mineral_richness;
+            cell_resources.insert(resource.name.clone(), value);
+            res.insert(cell.id, cell_resources);
+        }
+    }
+    Ok(res)
+}
+struct ResourceType {
+    name: String,
+    fertility_weight: f32,
+    mineral_weight: f32,
+    height_range: Option<(f64, f64)>,
 }
