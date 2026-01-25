@@ -512,10 +512,20 @@ fn click_cell(
     cells: Query<&Cell>,
     mut units: Query<&mut Unit>,
     mut selected_unit: ResMut<Selection>,
+    mut game_state: ResMut<GameState>,
+    world_map: Res<WorldMap>,
 ) {
     if event.button == PointerButton::Primary {
         match *selected_unit {
-            Selection::None => {}
+            Selection::None => {
+                if let Ok(cell) = cells.get(event.entity) {
+                    let active_player = game_state.active_player;
+                    let player = game_state.players.get_mut(&active_player).unwrap();
+                    if let Some(resources) = world_map.get_resources_for_cell(cell.cell_id) {
+                        player.add_notification(format!("Cell resources: {:?}", resources));
+                    }
+                }
+            }
             Selection::Unit(unit) => {
                 if let Ok(cell) = cells.get(event.entity) {
                     let mut unit = units.get_mut(unit).unwrap();
