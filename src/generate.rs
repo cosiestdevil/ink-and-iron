@@ -320,6 +320,14 @@ fn spawn_world(
         unlit: false,
         ..default()
     });
+    let terrarin_material = materials.add(StandardMaterial {
+            base_color_texture: Some(parchment_handle.clone()),
+            base_color: Color::WHITE,
+            perceptual_roughness: 0.9,
+            unlit: false,
+            ..default()
+        });
+    let mut outline_verts = vec![];
     for v_cell in world_map.iter_cells() {
         if v_cell.is_on_hull() {
             continue;
@@ -364,29 +372,20 @@ fn spawn_world(
         //     height_material_cache.insert(height_key, mat.clone());
         //     mat.clone()
         // };
-        let material = materials.add(StandardMaterial {
-                base_color_texture: Some(parchment_handle.clone()),
-                base_color: Color::WHITE,
-                perceptual_roughness: 0.9,
-                unlit: false,
-                ..default()
-            });
+        
         let cell_shape = ShapeBuilder::with(&polygon)
             .fill(color.with_saturation(color.saturation() / 2.0))
             .stroke((BLACK, 0.1))
             .build();
-        //let pos = world_map.get_position_for_cell(CellId(v_cell.site()));
         commands.spawn((
             cell_shape,
             Transform::from_xyz(
-                // Distribute shapes from -X_EXTENT/2 to +X_EXTENT/2.
                 v_cell.site_position().x as f32 * scale,
                 v_cell.site_position().y as f32 * scale,
                 0.0,
             ),
             RenderLayers::from_layers(&[render_layers::MINIMAP]),
         ));
-        let scaled_height = height * world_map.height_scale;
         let height_vertices = &vertices
             .iter()
             .map(|v| {
@@ -434,20 +433,20 @@ fn spawn_world(
         //         NotShadowCaster,
         //     ));
         // }
-        let temp = height_vertices
+        let cell_outline_verts = height_vertices
             .iter()
-            .map(|p| (p.p, p.h*world_map.height_scale))
+            .map(|p| p.p.extend(p.h * world_map.height_scale).xzy())
             .collect::<Vec<_>>();
-        let line = Polyline3d::new(extrude_polygon_xz_to_polyline_vertices(
-            &temp,
-            0.0,
-            scaled_height,
-        ));
+        outline_verts.extend_from_slice(cell_outline_verts.iter().map(|p|p + vec3(
+                // Distribute shapes from -X_EXTENT/2 to +X_EXTENT/2.
+                v_cell.site_position().x as f32 * scale,
+                0.0,
+                v_cell.site_position().y as f32 * scale,)).collect::<Vec<_>>().as_slice());
+        let line = Polyline3d::new(cell_outline_verts);
         let outline_mesh = meshes.add(line);
-
         let mut cell = commands.spawn((
             Mesh3d(meshes.add(mesh)),
-            MeshMaterial3d(material),
+            MeshMaterial3d(terrarin_material.clone()),
             Transform::from_xyz(
                 // Distribute shapes from -X_EXTENT/2 to +X_EXTENT/2.
                 v_cell.site_position().x as f32 * scale,
@@ -464,11 +463,21 @@ fn spawn_world(
                 Mesh3d(outline_mesh),
                 MeshMaterial3d(outline_material.clone()),
                 RenderLayers::from_layers(&[render_layers::WORLD]),
-                Transform::IDENTITY
+                Transform::IDENTITY,
+                NotShadowCaster,
             )],
         ));
         cell.observe(click_cell).observe(over_cell);
     }
+    let line = Polyline3d::new(outline_verts);
+    let outline_mesh = meshes.add(line);
+    // commands.spawn((
+    //     Mesh3d(outline_mesh),
+    //     MeshMaterial3d(outline_material.clone()),
+    //     RenderLayers::from_layers(&[render_layers::WORLD]),
+    //     Transform::IDENTITY,
+    //     NotShadowCaster,
+    // ));
     // let cascade_shadow_config = CascadeShadowConfigBuilder {
     //         first_cascade_far_bound: 0.3,
     //         maximum_distance: 3.0*scale,
@@ -492,7 +501,7 @@ fn spawn_world(
         ),
         Ground,
         NotShadowCaster,
-        RenderLayers::from_layers(&[render_layers::WORLD])
+        RenderLayers::from_layers(&[render_layers::WORLD]),
     ));
     commands.spawn((
         DirectionalLight {
