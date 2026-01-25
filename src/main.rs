@@ -2,10 +2,7 @@
 #![allow(clippy::too_many_arguments)]
 #![forbid(unsafe_code)]
 use std::{
-    collections::{HashMap, VecDeque},
-    env,
-    path::Path,
-    time::Duration,
+    collections::{HashMap, VecDeque}, env, hash::Hash, path::Path, time::Duration
 };
 
 use crate::{

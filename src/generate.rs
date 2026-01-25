@@ -401,7 +401,11 @@ fn spawn_world(
                 )
             })
             .collect::<Vec<_>>();
-        let mesh = temp::build_top_cap_mesh_convex_normalized_uv_with_colors(height_vertices,world_map.height_scale,|a|g.at(a).to_linear_rgba());
+        let mesh = temp::build_top_cap_mesh_convex_normalized_uv_with_colors(
+            height_vertices,
+            world_map.height_scale,
+            |a| g.at(a).to_linear_rgba(),
+        );
         // let temp = height_vertices
         //     .iter()
         //     .map(|p| (p.p, p.h))
@@ -653,12 +657,12 @@ fn extrude_polygon_xz_to_polyline_vertices(
 
     let mut verts = Vec::new();
 
-    let b = |i: usize| Vec3::new(polygon_xz[i].0.x, y0, polygon_xz[i].0.y);
+    //let b = |i: usize| Vec3::new(polygon_xz[i].0.x, y0, polygon_xz[i].0.y);
     let t = |i: usize| Vec3::new(polygon_xz[i].0.x, polygon_xz[i].1, polygon_xz[i].0.y);
 
     // Start at bottom[0], go up to top[0]
-    verts.push(b(0));
-    verts.push(t(0));
+    //verts.push(b(0));
+    // verts.push(t(0));
 
     // --- Top ring with vertical detours ---
     //
@@ -676,22 +680,22 @@ fn extrude_polygon_xz_to_polyline_vertices(
         verts.push(t(next));
 
         // vertical detour at 'next': t_next -> b_next -> t_next
-        verts.push(b(next));
-        verts.push(t(next));
+        //verts.push(b(next));
+        //verts.push(t(next));
     }
     // We are now back at t(0).
 
     // Go down to b0 (vertical edge 0 again)
-    verts.push(b(0));
+    // verts.push(b(0));
 
     // --- Bottom ring ---
     //
     // Walk around the bottom cycle once:
     // b0 -> b1 -> b2 -> ... -> b_{n-1} -> b0
-    for i in 0..n {
-        let next = (i + 1) % n;
-        verts.push(b(next));
-    }
+    // for i in 0..n {
+    //     let next = (i + 1) % n;
+    //     verts.push(b(next));
+    // }
 
     verts
 }
@@ -723,7 +727,7 @@ mod temp {
     /// - Convex only (fan triangulation).
     pub fn build_top_cap_mesh_convex_normalized_uv_with_colors<F>(
         boundary: &[PolyVert],
-        height_scale:f32,
+        height_scale: f32,
         height_to_color: F,
     ) -> Mesh
     where
@@ -754,7 +758,7 @@ mod temp {
 
         // Vertices
         for v in &b {
-            positions.push([v.p.x, v.h*height_scale, v.p.y]);
+            positions.push([v.p.x, v.h * height_scale, v.p.y]);
             uvs.push(uv_of(v.p));
             colors.push(height_to_color(v.h));
         }
