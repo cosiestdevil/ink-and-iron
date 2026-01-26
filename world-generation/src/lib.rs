@@ -1,6 +1,9 @@
 #![forbid(unsafe_code)]
 use std::{
-    cell, cmp::Ordering, collections::{HashMap, HashSet}, hash::Hash, ops::Deref
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    hash::Hash,
+    ops::Deref,
 };
 
 use geo::{Contains, CoordsIter, Polygon, unary_union};
@@ -500,27 +503,35 @@ pub fn generate_world<R: Rng + Clone>(
         &mut cells,
         &cells_height,
         |p| {
-            let fertility = fertitlity_fbm.get([p.x as f64 * fertility_noise_scale, p.y as f64 * fertility_noise_scale]) as f32;
+            let fertility = fertitlity_fbm.get([
+                p.x as f64 * fertility_noise_scale,
+                p.y as f64 * fertility_noise_scale,
+            ]) as f32;
             let mineral_richness =
-                mineral_multi.get([p.x as f64 * noise_scale, p.y as f64 * noise_scale]) as f32 * 1.0;
+                mineral_multi.get([p.x as f64 * noise_scale, p.y as f64 * noise_scale]) as f32
+                    * 1.0;
             (fertility, mineral_richness)
         },
-        &[ResourceType {
-            name: "Grain".into(),
-            fertility_weight: 1.0,
-            mineral_weight: 0.1,
-            height_range: Some((0.5, 0.6)),
-        },ResourceType {
-            name: "Forest".into(),
-            fertility_weight: 0.75,
-            mineral_weight: 0.2,
-            height_range: Some((0.5, 0.7)),
-        },ResourceType {
-            name: "Metal".into(),
-            fertility_weight: 0.0,
-            mineral_weight: 2.0,
-            height_range: Some((0.2, 1.0)),
-        }],
+        &[
+            ResourceType {
+                name: "Grain".into(),
+                fertility_weight: 1.0,
+                mineral_weight: 0.1,
+                height_range: Some((0.5, 0.6)),
+            },
+            ResourceType {
+                name: "Forest".into(),
+                fertility_weight: 0.75,
+                mineral_weight: 0.2,
+                height_range: Some((0.5, 0.7)),
+            },
+            ResourceType {
+                name: "Metal".into(),
+                fertility_weight: 0.0,
+                mineral_weight: 2.0,
+                height_range: Some((0.2, 1.0)),
+            },
+        ],
     )?;
     let mut world_map = WorldMap {
         scale,
@@ -1296,14 +1307,15 @@ fn build_resource_maps(
     let mut res = HashMap::new();
     for cell in cells.iter_mut() {
         let (fertility, mineral_richness) = noise(cell.pos);
-        let fertility = (fertility + 1.0) * 0.5; 
+        let fertility = (fertility + 1.0) * 0.5;
         let mineral_richness = (mineral_richness + 1.0) * 0.5;
         let height = cell_heights.get(&cell.id).cloned().unwrap_or(0.0);
         for resource in resources {
             if let Some((hmin, hmax)) = resource.height_range
-                && (height < hmin as f32 || height > hmax as f32) {
-                    continue;
-                }
+                && (height < hmin as f32 || height > hmax as f32)
+            {
+                continue;
+            }
             let mut cell_resources = res.get(&cell.id).cloned().unwrap_or_else(HashMap::new);
             let value =
                 resource.fertility_weight * fertility + resource.mineral_weight * mineral_richness;
