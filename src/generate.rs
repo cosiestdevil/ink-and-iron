@@ -321,13 +321,12 @@ fn spawn_world(
         ..default()
     });
     let terrarin_material = materials.add(StandardMaterial {
-            base_color_texture: Some(parchment_handle.clone()),
-            base_color: Color::WHITE,
-            perceptual_roughness: 0.9,
-            unlit: false,
-            ..default()
-        });
-    let mut outline_verts = vec![];
+        base_color_texture: Some(parchment_handle.clone()),
+        base_color: Color::WHITE,
+        perceptual_roughness: 0.9,
+        unlit: false,
+        ..default()
+    });
     for v_cell in world_map.iter_cells() {
         if v_cell.is_on_hull() {
             continue;
@@ -372,7 +371,7 @@ fn spawn_world(
         //     height_material_cache.insert(height_key, mat.clone());
         //     mat.clone()
         // };
-        
+
         let cell_shape = ShapeBuilder::with(&polygon)
             .fill(color.with_saturation(color.saturation() / 2.0))
             .stroke((BLACK, 0.1))
@@ -441,11 +440,6 @@ fn spawn_world(
             .iter()
             .map(|p| p.p.extend(p.h * world_map.height_scale).xzy())
             .collect::<Vec<_>>();
-        outline_verts.extend_from_slice(cell_outline_verts.iter().map(|p|p + vec3(
-                // Distribute shapes from -X_EXTENT/2 to +X_EXTENT/2.
-                v_cell.site_position().x as f32 * scale,
-                0.0,
-                v_cell.site_position().y as f32 * scale,)).collect::<Vec<_>>().as_slice());
         let line = Polyline3d::new(cell_outline_verts);
         let outline_mesh = meshes.add(line);
         let mut cell = commands.spawn((
@@ -473,8 +467,6 @@ fn spawn_world(
         ));
         cell.observe(click_cell).observe(over_cell);
     }
-    let line = Polyline3d::new(outline_verts);
-    let outline_mesh = meshes.add(line);
     // commands.spawn((
     //     Mesh3d(outline_mesh),
     //     MeshMaterial3d(outline_material.clone()),
@@ -644,60 +636,6 @@ fn gen_world(
         .await;
     });
     //next_state.set(AppState::InGame);
-}
-fn extrude_polygon_xz_to_polyline_vertices(
-    polygon_xz: &[(Vec2, f32)],
-    y0: f32,
-    _y1: f32,
-) -> Vec<Vec3> {
-    let n = polygon_xz.len();
-    if n == 0 {
-        return Vec::new();
-    }
-
-    let mut verts = Vec::new();
-
-    //let b = |i: usize| Vec3::new(polygon_xz[i].0.x, y0, polygon_xz[i].0.y);
-    let t = |i: usize| Vec3::new(polygon_xz[i].0.x, polygon_xz[i].1, polygon_xz[i].0.y);
-
-    // Start at bottom[0], go up to top[0]
-    //verts.push(b(0));
-    // verts.push(t(0));
-
-    // --- Top ring with vertical detours ---
-    //
-    // We do:
-    // t_i -> t_{i+1} (top edge)
-    //      -> b_{i+1} -> t_{i+1} (vertical edge down+up)
-    //
-    // That covers:
-    // - all top edges exactly once
-    // - all vertical edges at least once
-    for i in 0..n {
-        let next = (i + 1) % n;
-
-        // top edge: t_i -> t_next
-        verts.push(t(next));
-
-        // vertical detour at 'next': t_next -> b_next -> t_next
-        //verts.push(b(next));
-        //verts.push(t(next));
-    }
-    // We are now back at t(0).
-
-    // Go down to b0 (vertical edge 0 again)
-    // verts.push(b(0));
-
-    // --- Bottom ring ---
-    //
-    // Walk around the bottom cycle once:
-    // b0 -> b1 -> b2 -> ... -> b_{n-1} -> b0
-    // for i in 0..n {
-    //     let next = (i + 1) % n;
-    //     verts.push(b(next));
-    // }
-
-    verts
 }
 
 mod temp {
