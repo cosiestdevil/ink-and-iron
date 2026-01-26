@@ -9,7 +9,9 @@ members = [
     "llm-api",
     "llm-provider",
     "llm-provider-cpu",
-    "llm-provider-cuda", "llm-provider-mac", "llm-provider-fusor",
+    "llm-provider-cuda",
+    "llm-provider-mac",
+    "llm-provider-fusor",
     "menu",
     "pathfinding",
     "world-generation",
@@ -24,94 +26,54 @@ pathfinding = { path = "./pathfinding" }
 geo = "0.32.0"
 [dependencies]
 anyhow = "1"
-bevy_egui = "0.38.0"
+bevy_egui = "0.39.0"
 clap = { version = "4.5", features = ["derive"] }
 colorgrad = "0.8.0"
-glam = { version = "0.30.9", features = ["rand"] }
+glam = { version = "0.30", features = ["rand"] }
 num = "0.4.3"
 petgraph = "0.8.3"
 rand = "0.9.2"
 rand_chacha = "0.9.0"
 serde.workspace = true
-bevy-tokio-tasks = "0.17.0"
+bevy-tokio-tasks = "0.18"
 tokio = { workspace = true }
-bevy_prototype_lyon = "0.15.0"
-bevy_kira_audio = { version = "0.24.0", features = ["wav"] }
-bevy_easings = "0.17.1"
+bevy_prototype_lyon = "0.16"
+bevy_kira_audio = { version = "0.25.0", features = ["wav"] }
+bevy_easings = { version = "0.18" }
 llm-api = { workspace = true }
 world-generation = { workspace = true }
 pathfinding = { workspace = true }
 helpers = { workspace = true }
 llm = { path = "./llm" }
 menu = { path = "./menu" }
-#bevy_panorbit_camera = { version = "0.33.0", features = ["bevy_egui"] }
 tracing-appender = "0.2.3"
-bevy_rts_camera = { version = "0.12" }
+bevy_rts_camera = { version = "0.13" }
 chrono = "0.4.42"
-zip = "6.0.0"
-bevy-persistent = { version = "0.9.0", features = ["toml"] }
+zip = { version = "7", default-features = false, features = [
+    "deflate",
+    "time",
+] }
+bevy-persistent = { version = "0.10.0", features = ["toml"] }
 dirs = "6.0.0"
-bevy-panic-handler = "6.0.0"
-thiserror = "2.0.17"
-bevy-steamworks = "0.15.0"
+bevy-panic-handler = { version = "7.0.0" }
+thiserror = "2.0"
+bevy-steamworks = "0.16"
 geo.workspace = true
+ron = "0.12.0"
 
 [build-dependencies]
 dotenvy = "0.15.7"
 
 [dependencies.bevy]
-version = "0.17.2"
+version = "0.18"
 default-features = false
 features = [
-    "std",
-    "async_executor",
-    #"animation",
-    "bevy_asset",
-    "bevy_color",
-    "bevy_core_pipeline",
-    "bevy_post_process",
-    "bevy_anti_alias",
-    #"bevy_gilrs",
-    #"bevy_gizmos",
-    "bevy_gltf",
-    "bevy_input_focus",
-    "bevy_log",
-    "bevy_mesh_picking_backend",
-    "bevy_pbr",
-    "bevy_picking",
-    "bevy_render",
-    #"bevy_scene",
-    "bevy_image",
-    "bevy_mesh",
-    "bevy_camera",
-    "bevy_light",
-    "bevy_shader",
-    "bevy_sprite",
-    "bevy_sprite_picking_backend",
-    "bevy_sprite_render",
-    "bevy_state",
-    "bevy_text",
-    "bevy_ui",
-    "bevy_ui_picking_backend",
-    "bevy_ui_render",
-    "bevy_window",
-    "bevy_winit",
-    "custom_cursor",
-    "default_font",
-    "hdr",
-    #"ktx2",
-    "multi_threaded",
-    "png",
-    "reflect_auto_register",
-    #"smaa_luts",
-    #"sysinfo_plugin",
-    "tonemapping_luts",
-    #"webgl2",
-    "x11",
-    "wayland",
-    "debug",
-    "trace",
-    #"zstd_rust",
+    "default_app",
+    "default_platform",
+    "2d_bevy_render",
+    "3d_bevy_render",
+    "ui_bevy_render",
+    "picking",
 ]
 
 [profile.dev.package."*"]
