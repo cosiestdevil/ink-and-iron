@@ -59,10 +59,10 @@ pub fn spawn_minimap_camera(
     commands.spawn((
         Camera2d,
         Camera {
-            target: RenderTarget::Image(minimap.clone().into()),
             order: -1, // render before your main camera if you want
             ..default()
         },
+        RenderTarget::Image(minimap.clone().into()),
         Projection::Orthographic(OrthographicProjection {
             scale: world.scale / 60.0,
             ..OrthographicProjection::default_2d()

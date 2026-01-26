@@ -10,7 +10,7 @@ use crate::{
     llm::SettlementNameCtx,
 };
 use bevy::{
-    asset::{AssetLoader, LoadContext, LoadedFolder, io::Reader, ron},
+    asset::{AssetLoader, LoadContext, LoadedFolder, io::Reader},
     camera::{
         Exposure,
         visibility::{NoFrustumCulling, RenderLayers},
@@ -21,7 +21,7 @@ use bevy::{
     log::LogPlugin,
     math::bounding::Aabb2d,
     mesh::{Indices, PrimitiveTopology},
-    pbr::Atmosphere,
+    pbr::{Atmosphere, AtmosphereSettings, ScatteringMedium},
     post_process::bloom::Bloom,
     prelude::*,
     window::PrimaryWindow,
@@ -86,7 +86,7 @@ fn main() -> anyhow::Result<()> {
     }
     App::new()
         .add_plugins(SteamworksPlugin::init_app(STEAM_APP_ID).unwrap())
-        .add_plugins((
+        .add_plugins(
             DefaultPlugins
                 .set(WindowPlugin {
                     primary_window: Some(Window {
@@ -99,13 +99,10 @@ fn main() -> anyhow::Result<()> {
                     custom_layer: logs::custom_layer,
                     ..default()
                 }),
-            MeshPickingPlugin,
-            ShapePlugin,
-            AudioPlugin,
-            EasingsPlugin::default(),
-            RtsCameraPlugin,
-            bevy_panic_handler::PanicHandler::new().build(),
-        ))
+        )
+        .add_plugins((MeshPickingPlugin, ShapePlugin, AudioPlugin, RtsCameraPlugin))
+        .add_plugins(EasingsPlugin::default())
+        .add_plugins(bevy_panic_handler::PanicHandler::new().build())
         .add_audio_channel::<Music>()
         .add_plugins(bevy_tokio_tasks::TokioTasksPlugin::default())
         .add_plugins(crate::ui::UIPlugin)
@@ -469,6 +466,7 @@ fn startup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: ResMut<AssetServer>,
     mut contexts: EguiContexts,
+    mut scattering_mediums: ResMut<Assets<ScatteringMedium>>,
 ) {
     let scale = world_map.scale;
 
@@ -532,7 +530,9 @@ fn startup(
                     //     enabled: player.order == 0,
                     //     ..default()
                     // },
-                    Atmosphere::EARTH,
+                    Atmosphere::earthlike(scattering_mediums.add(ScatteringMedium::default())),
+                    // Can be adjusted to change the scene scale and rendering quality
+                    AtmosphereSettings::default(),
                     // AtmosphereSettings {
                     //     aerial_view_lut_max_distance: 3.2e5,
                     //     scene_units_to_m: 1e+4,
@@ -1033,7 +1033,7 @@ struct Civilisation {
     pub description: String,
     pub settlement_name_seeds: Vec<String>,
 }
-#[derive(Default)]
+#[derive(Default, TypePath)]
 struct CivilisationAssetLoader;
 
 /// Possible errors that can be produced by [`CivilisationAssetLoader`]
@@ -1075,7 +1075,7 @@ struct LLMProvider {
     pub id: String,
     pub meta: Vec<LibMeta>,
 }
-#[derive(Default)]
+#[derive(Default, TypePath)]
 struct LLMProviderAssetLoader;
 #[non_exhaustive]
 #[derive(Debug, Error)]

@@ -488,7 +488,7 @@ fn spawn_world(
     //         ..default()
     //     }
     //     .build();
-    commands.insert_resource(AmbientLight {
+    commands.insert_resource(GlobalAmbientLight {
         color: Color::srgb_u8(58, 135, 184),
         brightness: 20000.0,
         ..default()
